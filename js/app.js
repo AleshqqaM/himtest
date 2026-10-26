@@ -90,6 +90,54 @@ function setupTheme() {
   sync();
 }
 
+// Иконки в одном стиле: контур 24×24, цвет берётся из currentColor.
+const ICONS = {
+  flask: '<path d="M9 3h6M10 3v6L4.5 18.5a2 2 0 0 0 1.7 3h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7 15h10"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  beaker: '<path d="M5 3h14M6 3v15a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V3"/><path d="M6 12h12M10 16h.01M14 15h.01"/>',
+  atom: '<ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(120 12 12)"/><circle cx="12" cy="12" r="1.4"/>',
+  molecule: '<circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="17" r="2.5"/><circle cx="12" cy="7" r="3"/><path d="M10.4 9.6 7.4 15M13.6 9.6l3 5.4M8.5 17h7"/>',
+  table: '<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  cube: '<path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/>',
+  bolt: '<path d="M13 2 5 13.5h6L10 22l8-11.5h-6z"/>',
+  hexagon: '<path d="M12 2.5 20.2 7.2v9.6L12 21.5 3.8 16.8V7.2z"/><path d="M12 6.5l4.8 2.8v5.4L12 17.5"/>',
+  drop: '<path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/>',
+  redox: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+  flame: '<path d="M12 22a7 7 0 0 0 7-7c0-4-3-6-4-10-2 2-3 4-3 6-1-1-2-2-2-4-2 2-5 5-5 8a7 7 0 0 0 7 7z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  arrowLeft: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  cross: '<path d="M6 6l12 12M18 6 6 18"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9.5 17h5"/>',
+  share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
+  retry: '<path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+  chevron: '<path d="M6 9l6 6 6-6"/>',
+  bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+  star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+};
+const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.flask}</svg>`;
+const TOPIC_ICONS = {
+  'grade-6-substances': 'flask', 'grade-6-phenomena': 'sparkle', 'grade-7-basics': 'beaker', 'grade-7-atoms': 'atom',
+  'grade-8-compounds': 'molecule', 'grade-8-periodic': 'table', 'grade-9-elements': 'cube', 'grade-9-ions': 'bolt',
+  'grade-10-hydrocarbons': 'hexagon', 'grade-10-oxygen': 'drop', 'grade-11-general': 'redox', 'grade-11-inorganic': 'flame',
+};
+
+// Иллюстрация главного экрана: колба с пузырьками и атом.
+const HERO_ART = `<svg class="hero-art" viewBox="0 0 240 240" aria-hidden="true">
+  <defs><linearGradient id="liquid" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--lime)"/><stop offset="1" stop-color="var(--accent)"/></linearGradient></defs>
+  <circle cx="120" cy="128" r="96" fill="var(--accent-soft)"/>
+  <g class="orbit"><ellipse cx="184" cy="56" rx="34" ry="13" fill="none" stroke="var(--violet)" stroke-width="3"/><ellipse cx="184" cy="56" rx="34" ry="13" transform="rotate(60 184 56)" fill="none" stroke="var(--violet)" stroke-width="3"/><circle cx="184" cy="56" r="6" fill="var(--violet)"/></g>
+  <path d="M96 46h48v10h-7v44l44 78a15 15 0 0 1-13 22H72a15 15 0 0 1-13-22l44-78V56h-7z" fill="var(--surface)" stroke="var(--ink)" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M84 138h72l23 41a9 9 0 0 1-8 13H69a9 9 0 0 1-8-13z" fill="url(#liquid)"/>
+  <circle class="bubble b1" cx="104" cy="170" r="7" fill="var(--surface)" opacity=".85"/>
+  <circle class="bubble b2" cx="132" cy="160" r="5" fill="var(--surface)" opacity=".85"/>
+  <circle class="bubble b3" cx="120" cy="182" r="4" fill="var(--surface)" opacity=".85"/>
+  <path d="M108 46h24" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/>
+  <text x="40" y="70" font-family="Unbounded, sans-serif" font-weight="700" font-size="22" fill="var(--orange)">H₂O</text>
+</svg>`;
+
 // Все вопросы выводим как текст: JSON не может вставить HTML в страницу.
 const escapeHTML = value => String(value).replace(/[&<>"']/g, char =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -123,27 +171,32 @@ async function initialize() {
     screen = 'home';
     const topics = catalog.filter(topic => topic.grade === selectedGrade);
     main.innerHTML = `
-      <section class="hero" aria-labelledby="home-title">
-        <div><p class="eyebrow"><span class="status-dot"></span> Твоя маленькая лаборатория знаний</p>
-          <h1 id="home-title" tabindex="-1" data-focus>Химия становится<br><span>понятнее.</span></h1>
-          <p class="hero-copy">От первых открытий до сложных реакций. Выбирай тему, проверяй себя и разбирайся в том, что пока не получилось.</p>
-          <div class="micro-tags"><span>20 вопросов</span><span>20 минут</span><span>С понятным разбором</span></div>
+      <section class="home-hero" aria-labelledby="home-title">
+        <div class="home-hero-text">
+          <p class="chip chip-accent">${icon('sparkle')} 6–11 класс · без регистрации</p>
+          <h1 id="home-title" tabindex="-1" data-focus>Химия без зубрёжки. <span class="gradient-text">Погнали?</span></h1>
+          <p class="hero-copy">20 вопросов, 20 минут и честный разбор, где был подвох. Ошибаться можно — так и учатся.</p>
         </div>
-        <aside class="lab-card" aria-label="Молекула воды H₂O: два атома водорода и один атом кислорода">
-          <div class="lab-card-top"><span>МАЛЕНЬКОЕ ОТКРЫТИЕ № 01</span><span>↗</span></div>
-          <div class="molecule" aria-hidden="true"><i class="bond"></i><i class="bond second"></i><span class="atom central">O</span><span class="atom h1">H</span><span class="atom h2">H</span></div>
-          <div class="lab-card-bottom"><div><strong>Всё начинается<br>с любопытства.</strong><span>Даже знакомая вода — это химия.</span></div><span class="formula" aria-hidden="true">H₂O</span></div>
-        </aside>
+        ${HERO_ART}
       </section>
-      <section aria-labelledby="choose-title"><div class="section-head"><h2 id="choose-title">Что изучим сегодня?</h2><p>Сначала класс, потом тема</p></div>
-        <div class="grade-picker" role="group" aria-label="Выберите класс">${[6,7,8,9,10,11].map(grade => `<button class="grade-button" data-grade="${grade}" aria-pressed="${grade === selectedGrade}" aria-label="${grade} класс">${grade}<span class="grade-word"> класс</span></button>`).join('')}</div>
-        <div class="topics-grid" id="topics">${topics.map((topic, i) => topic.file ? `
-          <article class="topic-card"><div class="topic-top"><span class="topic-icon" aria-hidden="true">${escapeHTML(topic.icon)}</span><span class="topic-number">ТЕМА / ${String(i + 1).padStart(2, '0')}</span></div>
-          <h3>${escapeHTML(topic.title)}</h3><p class="topic-description">${escapeHTML(topic.description)}</p>
-          <div class="topic-meta"><span>${Math.min(20, topic.count)} вопросов из ${topic.count}</span><span>◷ 20 минут</span></div>
-          <button class="button primary" data-start="${escapeHTML(topic.id)}" aria-label="Начать тест: ${escapeHTML(topic.title)}">Начать тест <span aria-hidden="true">↗</span></button></article>` : '').join('') || `<div class="empty-state"><h3>Этот класс — следующий шаг</h3><p>Банк вопросов для этого класса пока пополняется. Здесь появятся:</p><ul>${topics.map(topic => `<li>${escapeHTML(topic.title)}</li>`).join('')}</ul></div>`}</div>
+      <ol class="steps" aria-label="Как это работает">
+        <li><span class="step-num">1</span><span><strong>Класс</strong>выбери свой</span></li>
+        <li><span class="step-num">2</span><span><strong>Тема</strong>что повторим</span></li>
+        <li><span class="step-num">3</span><span><strong>20 минут</strong>и сразу разбор</span></li>
+      </ol>
+      <section class="choose" aria-labelledby="choose-title">
+        <h2 id="choose-title" class="section-title">Что изучим сегодня?</h2>
+        <div class="grade-tabs" role="group" aria-label="Выбери класс">${[6,7,8,9,10,11].map(grade => `<button class="grade-tab" type="button" data-grade="${grade}" aria-pressed="${grade === selectedGrade}" aria-label="${grade} класс">${grade}<small>класс</small></button>`).join('')}</div>
+        <div class="topic-list" id="topics">${topics.map((topic, i) => topic.file ? `
+          <article class="topic tone-${i % 4}">
+            <div class="topic-head"><span class="topic-icon">${icon(TOPIC_ICONS[topic.id])}</span><span class="topic-tag">Тема ${i + 1}</span></div>
+            <h3>${escapeHTML(topic.title)}</h3>
+            <p class="topic-description">${escapeHTML(topic.description)}</p>
+            <p class="topic-meta"><span>${icon('grid')} ${Math.min(20, topic.count)} из ${topic.count}</span><span>${icon('clock')} 20 мин</span></p>
+            <button class="button primary topic-start" type="button" data-start="${escapeHTML(topic.id)}" aria-label="Начать тест: ${escapeHTML(topic.title)}">Погнали ${icon('arrowRight')}</button>
+          </article>` : '').join('') || `<div class="empty-state"><h3>Этот класс скоро подъедет</h3><p>Вопросы пока готовятся. Здесь появятся:</p><ul>${topics.map(topic => `<li>${escapeHTML(topic.title)}</li>`).join('')}</ul></div>`}</div>
       </section>
-      <aside class="learning-note"><span aria-hidden="true">✧</span><p><strong>Ошибаться — часть обучения.</strong> После теста покажем правильные ответы и объясним почему. Это тренировка, а не контрольная.<br>Тем в тренажёре: ${catalog.filter(item => item.file).length}. Перед публикацией вопросы нужно проверить учителю химии.</p></aside>`;
+      <aside class="note-card">${icon('bulb')}<p><strong>Ошибаться — норм.</strong> После теста покажем правильные ответы и объясним почему. Это тренировка, а не контрольная. Тем в тренажёре: ${catalog.filter(item => item.file).length}. Вопросы авторские, их стоит сверить с учителем химии.</p></aside>`;
     main.querySelectorAll('[data-grade]').forEach(button => button.addEventListener('click', () => {
       selectedGrade = Number(button.dataset.grade);
       showHome();
