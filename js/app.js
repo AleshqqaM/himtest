@@ -117,6 +117,7 @@ const ICONS = {
   bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
 };
+const motionOK = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.flask}</svg>`;
 const TOPIC_ICONS = {
   'grade-6-substances': 'flask', 'grade-6-phenomena': 'sparkle', 'grade-7-basics': 'beaker', 'grade-7-atoms': 'atom',
@@ -167,8 +168,13 @@ async function initialize() {
     return response.json();
   }
 
+  function setScreen(name) {
+    screen = name;
+    document.body.dataset.screen = name;
+  }
+
   function showHome(moveFocus = false) {
-    screen = 'home';
+    setScreen('home');
     const topics = catalog.filter(topic => topic.grade === selectedGrade);
     main.innerHTML = `
       <section class="home-hero" aria-labelledby="home-title">
@@ -219,52 +225,130 @@ async function initialize() {
       const questions = prepareQuestions(bank);
       const startedAt = Date.now();
       session = { topic, questions, answers: Array(questions.length).fill(null), index: 0,
-        startedAt, deadline: startedAt + TEST_SECONDS * 1000, ended: false, warned: false };
+        startedAt, deadline: startedAt + TEST_SECONDS * 1000, ended: false, warned: false, streak: 0, bestStreak: 0 };
       lastTopic = topic.id;
-      screen = 'quiz';
+      setScreen('quiz');
       announcer.textContent = 'Тест начался. На ответы есть 20 минут.';
       showQuestion();
       clearInterval(timerId);
       timerId = setInterval(updateTimer, 250);
       updateTimer();
     } catch (error) {
-      screen = 'error';
+      setScreen('error');
       console.error(error);
       showError('Не удалось открыть тему. Проверьте подключение и попробуйте ещё раз.');
     }
   }
 
-  function showQuestion() {
+  const LETTERS = ['А', 'Б', 'В', 'Г'];
+  const PRAISE = ['Верно!', 'Точно в цель!', 'Так держать!', 'Чётко!', 'Есть!'];
+  const OOPS = ['Почти! Разберём, где подвох', 'Мимо, но это поправимо', 'Не то — смотри, почему'];
+  const pick = list => list[Math.floor(Math.random() * list.length)];
+
+  function feedbackHTML(question, answer) {
+    if (answer === null) return '';
+    const right = answer === question.correctIndex;
+    return `<div class="feedback ${right ? 'is-correct' : 'is-wrong'}">
+      <p class="feedback-title">${icon(right ? 'check' : 'bulb')} ${escapeHTML(right ? pick(PRAISE) : pick(OOPS))}</p>
+      ${right ? '' : `<p class="feedback-answer">Правильный ответ: <strong>${escapeHTML(question.options[question.correctIndex])}</strong></p>`}
+      <p class="feedback-text">${escapeHTML(question.explanation)}</p></div>`;
+  }
+
+  function nextLabel() {
+    const last = session.index === session.questions.length - 1;
+    if (last) return `Завершить ${icon('check')}`;
+    return session.answers[session.index] === null ? `Пропустить ${icon('arrowRight')}` : `Дальше ${icon('arrowRight')}`;
+  }
+
+  function streakHTML() {
+    return session.streak >= 2 ? `<span class="streak-chip" aria-label="Серия правильных ответов: ${session.streak}"><span aria-hidden="true">🔥</span> ${session.streak}</span>` : '';
+  }
+
+  function showQuestion(direction = 0, refocus = true) {
     if (!session || session.ended) return;
     if (remainingSeconds(session.deadline) === 0) { finishTest(true); return; }
     const { questions, answers, index, topic } = session;
     const question = questions[index];
-    const answered = answers.filter(answer => answer !== null).length;
-    main.innerHTML = `<section class="quiz-shell" aria-label="Тест по химии">
-      <div class="quiz-bar"><span class="quiz-topic">${topic.grade} класс / ${escapeHTML(topic.title)}</span><div class="timer" role="timer" aria-live="off" aria-label="Осталось времени"><span aria-hidden="true">◷ </span><span id="time-value">${formatTime(remainingSeconds(session.deadline))}</span></div></div>
-      <div class="progress-info"><span>Вопрос ${index + 1} из ${questions.length}</span><span id="answered-count">Отвечено: ${answered} из ${questions.length}</span></div>
-      <progress max="${questions.length}" value="${answered}" aria-label="Количество отвеченных вопросов"></progress>
-      <div class="question-card"><fieldset aria-describedby="question-help"><legend tabindex="-1" data-focus>${escapeHTML(question.text)}</legend><div class="options">${question.options.map((option, i) => `<label class="option"><input type="radio" name="answer" value="${i}" ${answers[index] === i ? 'checked' : ''} aria-label="${escapeHTML(option)}"><span>${escapeHTML(option)}</span></label>`).join('')}</div></fieldset>
-      <p class="question-help" id="question-help">Один правильный ответ. Можно вернуться и изменить выбор.</p></div>
-      <nav class="quiz-nav" aria-label="Навигация по вопросам"><button class="button secondary" id="previous" ${index === 0 ? 'disabled' : ''}>← Назад</button><button class="button primary" id="next">${index === questions.length - 1 ? 'Завершить тест' : 'Далее →'}</button></nav>
-      <div class="finish-row"><button class="text-button" id="finish">Завершить досрочно</button></div></section>`;
-    main.querySelectorAll('input[name="answer"]').forEach(input => input.addEventListener('change', () => {
-      // После сна вкладки сперва проверяем реальное время, а не число тиков.
-      if (remainingSeconds(session.deadline) === 0) { finishTest(true); return; }
-      session.answers[session.index] = Number(input.value);
-      const count = session.answers.filter(answer => answer !== null).length;
-      main.querySelector('#answered-count').textContent = `Отвечено: ${count} из ${questions.length}`;
-      main.querySelector('progress').value = count;
-    }));
-    main.querySelector('#previous').addEventListener('click', () => { session.index--; showQuestion(); });
-    main.querySelector('#next').addEventListener('click', () => {
-      if (session.index === questions.length - 1) askFinish();
-      else { session.index++; showQuestion(); }
-    });
+    const answer = answers[index];
+    const answered = answers.filter(item => item !== null).length;
+    const locked = answer !== null;
+    main.innerHTML = `<section class="quiz" aria-label="Тест по химии">
+      <div class="quiz-top">
+        <button class="icon-button" id="finish" type="button" aria-label="Завершить досрочно">${icon('cross')}</button>
+        <div class="quiz-progress"><div class="bar" role="progressbar" aria-label="Отвечено вопросов" aria-valuemin="0" aria-valuemax="${questions.length}" aria-valuenow="${answered}"><span style="width:${answered / questions.length * 100}%"></span></div></div>
+        <span id="streak">${streakHTML()}</span>
+        <div class="timer" role="timer" aria-live="off" aria-label="Осталось времени">${icon('clock')}<span id="time-value">${formatTime(remainingSeconds(session.deadline))}</span></div>
+      </div>
+      <div class="question-card" id="question-card">
+        <p class="q-meta"><span>Вопрос ${index + 1} <span class="q-of">из ${questions.length}</span></span><span>${topic.grade} класс · ${escapeHTML(topic.title)}</span></p>
+        <h1 class="q-text" id="q-text" tabindex="-1" data-focus>${escapeHTML(question.text)}</h1>
+        <div class="options" role="group" aria-labelledby="q-text">${question.options.map((option, i) => {
+          const state = !locked ? '' : i === question.correctIndex ? 'is-correct' : i === answer ? 'is-wrong' : 'is-dim';
+          return `<button class="option ${state}" type="button" data-option="${i}" aria-pressed="${answer === i}" ${locked ? 'aria-disabled="true"' : ''}>
+            <span class="option-key" aria-hidden="true">${LETTERS[i]}</span><span class="option-text">${escapeHTML(option)}</span>
+            <span class="option-mark" aria-hidden="true">${state === 'is-correct' ? icon('check') : state === 'is-wrong' ? icon('cross') : ''}</span>
+            ${state === 'is-correct' ? '<span class="sr-only">— правильный ответ</span>' : state === 'is-wrong' ? '<span class="sr-only">— твой ответ, неверный</span>' : ''}</button>`;
+        }).join('')}</div>
+        <div id="feedback">${feedbackHTML(question, answer)}</div>
+      </div>
+      <nav class="quiz-nav" aria-label="Навигация по вопросам">
+        <button class="button secondary" id="previous" type="button" ${index === 0 ? 'disabled' : ''} aria-label="Предыдущий вопрос">${icon('arrowLeft')}</button>
+        <button class="button primary" id="next" type="button">${nextLabel()}</button>
+      </nav>
+      <p class="kbd-hint">Клавиши <kbd>1</kbd>–<kbd>4</kbd> — ответ, <kbd>Enter</kbd> — дальше</p></section>`;
+    main.querySelectorAll('[data-option]').forEach(button => button.addEventListener('click', () => choose(Number(button.dataset.option))));
+    main.querySelector('#previous').addEventListener('click', () => { session.index--; showQuestion(-1); });
+    main.querySelector('#next').addEventListener('click', goNext);
     main.querySelector('#finish').addEventListener('click', askFinish);
     updateTimer();
-    focusHeading();
+    if (refocus) focusHeading();
+    if (direction && motionOK()) {
+      main.querySelector('#question-card').animate([
+        { opacity: 0, transform: `translateX(${direction * 28}px)` }, { opacity: 1, transform: 'none' }],
+      { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' });
+    }
   }
+
+  function goNext() {
+    if (!session || session.ended) return;
+    if (session.index === session.questions.length - 1) askFinish();
+    else { session.index++; showQuestion(1); }
+  }
+
+  // Ответ фиксируется сразу: так честно работают мгновенная проверка и серии.
+  function choose(option) {
+    // После сна вкладки сперва проверяем реальное время, а не число тиков.
+    if (remainingSeconds(session.deadline) === 0) { finishTest(true); return; }
+    if (session.answers[session.index] !== null) return;
+    const question = session.questions[session.index];
+    session.answers[session.index] = option;
+    const right = option === question.correctIndex;
+    session.streak = right ? session.streak + 1 : 0;
+    session.bestStreak = Math.max(session.bestStreak, session.streak);
+    showQuestion(0, false);
+    announcer.textContent = right
+      ? `Верно!${session.streak >= 2 ? ` Серия: ${session.streak}.` : ''}`
+      : `Неверно. Правильный ответ: ${question.options[question.correctIndex]}.`;
+    main.querySelector('#next').focus({ preventScroll: true });
+    main.querySelector('#feedback').scrollIntoView({ block: 'nearest', behavior: motionOK() ? 'smooth' : 'auto' });
+    if (!motionOK()) return;
+    const chosen = main.querySelector(`[data-option="${option}"]`);
+    chosen.animate(right
+      ? [{ transform: 'scale(1)' }, { transform: 'scale(1.03)' }, { transform: 'scale(1)' }]
+      : [{ transform: 'translateX(0)' }, { transform: 'translateX(-8px)' }, { transform: 'translateX(7px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(0)' }],
+    { duration: right ? 320 : 380, easing: 'ease-out' });
+    main.querySelector('.feedback')?.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' });
+    if (right && session.streak >= 2) main.querySelector('.streak-chip')?.animate([{ transform: 'scale(.6)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(.34,1.56,.64,1)' });
+  }
+
+  document.addEventListener('keydown', event => {
+    if (screen !== 'quiz' || !session || session.ended || dialog.open) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const n = '1234'.indexOf(event.key);
+    if (n !== -1) { event.preventDefault(); choose(n); }
+    // На кнопках Enter и так нажимает кнопку; здесь — когда фокус на тексте вопроса.
+    else if (event.key === 'Enter' && !document.activeElement?.matches('button') && session.answers[session.index] !== null) { event.preventDefault(); goNext(); }
+  });
 
   function updateTimer() {
     if (!session || session.ended) return;
@@ -295,7 +379,7 @@ async function initialize() {
   function finishTest(timedOut = false) {
     if (!session || session.ended) return;
     session.ended = true;
-    screen = 'result';
+    setScreen('result');
     clearInterval(timerId);
     if (dialog.open) dialog.close();
     const elapsed = timedOut ? TEST_SECONDS : Math.min(TEST_SECONDS, Math.floor((Date.now() - session.startedAt) / 1000));
