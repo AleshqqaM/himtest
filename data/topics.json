@@ -1,0 +1,110 @@
+[
+  {
+    "id": "grade-6-substances",
+    "grade": 6,
+    "title": "Вещества и смеси",
+    "description": "Чем вещество отличается от тела, как устроены смеси и как разделить их компоненты.",
+    "icon": "⚗",
+    "count": 25,
+    "file": "./data/questions/grade-6-substances.json"
+  },
+  {
+    "id": "grade-6-phenomena",
+    "grade": 6,
+    "title": "Физические и химические явления",
+    "description": "Таяние льда, ржавление железа и другие превращения вокруг нас. Учимся замечать разницу.",
+    "icon": "✧",
+    "count": 25,
+    "file": "./data/questions/grade-6-phenomena.json"
+  },
+  {
+    "id": "grade-7-basics",
+    "grade": 7,
+    "title": "Первоначальные химические понятия",
+    "description": "Символы элементов, простые и сложные вещества, химические формулы и первые расчёты.",
+    "icon": "⚗",
+    "count": 25,
+    "file": "./data/questions/grade-7-basics.json"
+  },
+  {
+    "id": "grade-7-atoms",
+    "grade": 7,
+    "title": "Атомы, молекулы и элементы",
+    "description": "Знакомимся со строением атома, молекулами, ионами и составом простых веществ.",
+    "icon": "◎",
+    "count": 25,
+    "file": "./data/questions/grade-7-atoms.json"
+  },
+  {
+    "id": "grade-8-compounds",
+    "grade": 8,
+    "title": "Основные классы неорганических соединений",
+    "description": "Оксиды, кислоты, основания и соли: распознавание, свойства и простые уравнения реакций.",
+    "icon": "⚗",
+    "count": 25,
+    "file": "./data/questions/grade-8-compounds.json"
+  },
+  {
+    "id": "grade-8-periodic",
+    "grade": 8,
+    "title": "Периодический закон и строение атома",
+    "description": "Порядковый номер, периоды и группы, электронные слои и закономерности свойств элементов.",
+    "icon": "▦",
+    "count": 25,
+    "file": "./data/questions/grade-8-periodic.json"
+  },
+  {
+    "id": "grade-9-elements",
+    "grade": 9,
+    "title": "Металлы и неметаллы",
+    "description": "Свойства металлов и неметаллов, ряд активности и превращения распространённых соединений.",
+    "icon": "◇",
+    "count": 25,
+    "file": "./data/questions/grade-9-elements.json"
+  },
+  {
+    "id": "grade-9-ions",
+    "grade": 9,
+    "title": "Электролитическая диссоциация и ионный обмен",
+    "description": "Ионы в растворе, сильные электролиты, осадки, газы и сокращённые ионные уравнения.",
+    "icon": "⇄",
+    "count": 25,
+    "file": "./data/questions/grade-9-ions.json"
+  },
+  {
+    "id": "grade-10-hydrocarbons",
+    "grade": 10,
+    "title": "Углеводороды",
+    "description": "Алканы, алкены, алкины и арены: формулы, изомерия и характерные реакции.",
+    "icon": "⌬",
+    "count": 25,
+    "file": "./data/questions/grade-10-hydrocarbons.json"
+  },
+  {
+    "id": "grade-10-oxygen",
+    "grade": 10,
+    "title": "Кислородсодержащие органические соединения",
+    "description": "Спирты, фенол, альдегиды, кислоты, сложные эфиры и углеводы — по характерным группам и реакциям.",
+    "icon": "OH",
+    "count": 25,
+    "file": "./data/questions/grade-10-oxygen.json"
+  },
+  {
+    "id": "grade-11-general",
+    "grade": 11,
+    "title": "Общая химия и ОВР",
+    "description": "ОВР, химическая связь, скорость реакций, равновесие и расчёты по уравнениям.",
+    "icon": "⇌",
+    "count": 25,
+    "file": "./data/questions/grade-11-general.json"
+  },
+  {
+    "id": "grade-11-inorganic",
+    "grade": 11,
+    "title": "Неорганическая химия и взаимосвязи веществ",
+    "description": "Цепочки превращений, амфотерность, гидролиз солей и качественные реакции неорганических веществ.",
+    "icon": "△",
+    "count": 25,
+    "file": "./data/questions/grade-11-inorganic.json"
+  }
+]
