@@ -1,0 +1,352 @@
+[
+  {
+    "id": "grade-8-compounds-001",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какую формулу имеет оксид кальция?",
+    "options": [
+      "Ca(OH)₂",
+      "CaCl₂",
+      "CaCO₃",
+      "CaO"
+    ],
+    "correctIndex": 3,
+    "explanation": "Оксид кальция состоит из кальция и кислорода. Формула CaO соответствует оксиду, а Ca(OH)₂ — основанию."
+  },
+  {
+    "id": "grade-8-compounds-002",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какое вещество относится к кислотам?",
+    "options": [
+      "CaO",
+      "NaCl",
+      "H₂SO₄",
+      "NaOH"
+    ],
+    "correctIndex": 2,
+    "explanation": "H₂SO₄ — серная кислота. NaOH является основанием, CaO — оксидом, NaCl — солью."
+  },
+  {
+    "id": "grade-8-compounds-003",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какое вещество является щёлочью?",
+    "options": [
+      "HCl",
+      "NaOH",
+      "Cu(OH)₂",
+      "Fe(OH)₃"
+    ],
+    "correctIndex": 1,
+    "explanation": "Щёлочи — растворимые в воде основания. Гидроксид натрия NaOH хорошо растворим, а указанные гидроксиды меди и железа практически нерастворимы."
+  },
+  {
+    "id": "grade-8-compounds-004",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какое вещество является солью?",
+    "options": [
+      "K₂SO₄",
+      "H₂SO₄",
+      "KOH",
+      "SO₃"
+    ],
+    "correctIndex": 0,
+    "explanation": "K₂SO₄ — сульфат калия, соль серной кислоты. Соли состоят из катионов и анионов кислотных остатков."
+  },
+  {
+    "id": "grade-8-compounds-005",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой оксид является основным?",
+    "options": [
+      "CO₂",
+      "SO₃",
+      "SiO₂",
+      "CuO"
+    ],
+    "correctIndex": 3,
+    "explanation": "CuO — основный оксид, ему соответствует основание Cu(OH)₂. Остальные перечисленные оксиды кислотные."
+  },
+  {
+    "id": "grade-8-compounds-006",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой оксид является кислотным?",
+    "options": [
+      "CaO",
+      "CuO",
+      "SO₃",
+      "Na₂O"
+    ],
+    "correctIndex": 2,
+    "explanation": "SO₃ — кислотный оксид, соответствующий серной кислоте. Na₂O, CaO и CuO относят к основным оксидам."
+  },
+  {
+    "id": "grade-8-compounds-007",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой оксид является амфотерным?",
+    "options": [
+      "SO₂",
+      "Al₂O₃",
+      "Na₂O",
+      "CaO"
+    ],
+    "correctIndex": 1,
+    "explanation": "Амфотерный оксид Al₂O₃ способен реагировать и с кислотами, и со щелочами. Это отличает его от основных и кислотных оксидов."
+  },
+  {
+    "id": "grade-8-compounds-008",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой гидроксид является амфотерным?",
+    "options": [
+      "Zn(OH)₂",
+      "NaOH",
+      "KOH",
+      "Ca(OH)₂"
+    ],
+    "correctIndex": 0,
+    "explanation": "Гидроксид цинка проявляет и основные, и кислотные свойства. NaOH, KOH и Ca(OH)₂ — основания."
+  },
+  {
+    "id": "grade-8-compounds-009",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какова формула гидроксида кальция?",
+    "options": [
+      "CaOH",
+      "Ca₂OH",
+      "CaO₂",
+      "Ca(OH)₂"
+    ],
+    "correctIndex": 3,
+    "explanation": "Кальций имеет валентность II, гидроксильная группа — I. Поэтому на один атом кальция приходятся две группы OH."
+  },
+  {
+    "id": "grade-8-compounds-010",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какова формула хлорида алюминия?",
+    "options": [
+      "Al₂Cl",
+      "AlCl₂",
+      "AlCl₃",
+      "AlCl"
+    ],
+    "correctIndex": 2,
+    "explanation": "Ион алюминия имеет заряд +3, хлорид-ион — −1. Для нейтрального соединения нужны три хлорид-иона на один ион алюминия."
+  },
+  {
+    "id": "grade-8-compounds-011",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Как называется соль Na₂CO₃?",
+    "options": [
+      "Хлорид натрия",
+      "Карбонат натрия",
+      "Сульфат натрия",
+      "Нитрат натрия"
+    ],
+    "correctIndex": 1,
+    "explanation": "Кислотный остаток CO₃ соответствует угольной кислоте. Соли с этим остатком называют карбонатами."
+  },
+  {
+    "id": "grade-8-compounds-012",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Как называется вещество HNO₃?",
+    "options": [
+      "Азотная кислота",
+      "Азотистая кислота",
+      "Серная кислота",
+      "Соляная кислота"
+    ],
+    "correctIndex": 0,
+    "explanation": "HNO₃ — азотная кислота. Азотистая кислота имеет другую формулу: HNO₂."
+  },
+  {
+    "id": "grade-8-compounds-013",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой кислотный остаток входит в состав сульфатов?",
+    "options": [
+      "CO₃²⁻",
+      "NO₃⁻",
+      "Cl⁻",
+      "SO₄²⁻"
+    ],
+    "correctIndex": 3,
+    "explanation": "Сульфаты — соли серной кислоты H₂SO₄. Их анион — сульфат SO₄²⁻."
+  },
+  {
+    "id": "grade-8-compounds-014",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какие вещества образуются при полной нейтрализации кислоты основанием?",
+    "options": [
+      "Только кислород",
+      "Металл и водород",
+      "Соль и вода",
+      "Только водород"
+    ],
+    "correctIndex": 2,
+    "explanation": "При полной нейтрализации кислота и основание дают среднюю соль и воду. Например, HCl + NaOH → NaCl + H₂O."
+  },
+  {
+    "id": "grade-8-compounds-015",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой продукт, кроме воды, образуется в реакции HCl + NaOH?",
+    "options": [
+      "NaNO₃",
+      "NaCl",
+      "Na₂SO₄",
+      "Na₂CO₃"
+    ],
+    "correctIndex": 1,
+    "explanation": "Ионы натрия и хлорид-ионы соответствуют соли NaCl. Суммарное уравнение: HCl + NaOH → NaCl + H₂O."
+  },
+  {
+    "id": "grade-8-compounds-016",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какие продукты получаются при взаимодействии CaO с водой?",
+    "options": [
+      "Ca(OH)₂",
+      "CaH₂ и O₂",
+      "CaCO₃ и H₂",
+      "CaCl₂ и H₂O"
+    ],
+    "correctIndex": 0,
+    "explanation": "Оксид кальция взаимодействует с водой с образованием гидроксида кальция. Уравнение: CaO + H₂O → Ca(OH)₂."
+  },
+  {
+    "id": "grade-8-compounds-017",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой продукт образуется при реакции SO₃ с водой?",
+    "options": [
+      "H₂SO₃",
+      "H₂S",
+      "Na₂SO₄",
+      "H₂SO₄"
+    ],
+    "correctIndex": 3,
+    "explanation": "SO₃ — кислотный оксид, соответствующий H₂SO₄. С водой он образует серную кислоту."
+  },
+  {
+    "id": "grade-8-compounds-018",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Что получается при реакции CuO с соляной кислотой?",
+    "options": [
+      "Cu(OH)₂ и Cl₂",
+      "CuSO₄ и O₂",
+      "CuCl₂ и H₂O",
+      "Cu и H₂"
+    ],
+    "correctIndex": 2,
+    "explanation": "Основный оксид реагирует с кислотой с образованием соли и воды. Уравнение: CuO + 2HCl → CuCl₂ + H₂O."
+  },
+  {
+    "id": "grade-8-compounds-019",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какое вещество образуется наряду с водой при нагревании Cu(OH)₂?",
+    "options": [
+      "CuCO₃",
+      "CuO",
+      "CuCl₂",
+      "CuSO₄"
+    ],
+    "correctIndex": 1,
+    "explanation": "Нерастворимый гидроксид меди(II) при нагревании разлагается. Получаются оксид меди(II) и вода: Cu(OH)₂ → CuO + H₂O."
+  },
+  {
+    "id": "grade-8-compounds-020",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой газ выделяется при реакции CaCO₃ с избытком HCl?",
+    "options": [
+      "CO₂",
+      "O₂",
+      "H₂",
+      "N₂"
+    ],
+    "correctIndex": 0,
+    "explanation": "Карбонаты с кислотами образуют соль, воду и углекислый газ. Уравнение: CaCO₃ + 2HCl → CaCl₂ + H₂O + CO₂."
+  },
+  {
+    "id": "grade-8-compounds-021",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Как окрашивается лакмус в кислом водном растворе?",
+    "options": [
+      "В синий цвет",
+      "В зелёный цвет",
+      "В чёрный цвет",
+      "В красный цвет"
+    ],
+    "correctIndex": 3,
+    "explanation": "В кислой среде лакмус становится красным. В щелочной среде он синий."
+  },
+  {
+    "id": "grade-8-compounds-022",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какую окраску приобретает фенолфталеин в обычном разбавленном растворе NaOH?",
+    "options": [
+      "Жёлтую",
+      "Чёрную",
+      "Малиновую",
+      "Синюю"
+    ],
+    "correctIndex": 2,
+    "explanation": "Фенолфталеин в щелочной среде окрашивается в малиновый цвет. В кислой и нейтральной средах он бесцветен."
+  },
+  {
+    "id": "grade-8-compounds-023",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой коэффициент нужен перед HCl в уравнении Mg + HCl → MgCl₂ + H₂?",
+    "options": [
+      "4",
+      "2",
+      "1",
+      "3"
+    ],
+    "correctIndex": 1,
+    "explanation": "В MgCl₂ два атома хлора, поэтому нужны две молекулы HCl. Сбалансированное уравнение: Mg + 2HCl → MgCl₂ + H₂."
+  },
+  {
+    "id": "grade-8-compounds-024",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какой коэффициент нужен перед NaOH для полной нейтрализации 1 моль H₂SO₄?",
+    "options": [
+      "2",
+      "1",
+      "3",
+      "4"
+    ],
+    "correctIndex": 0,
+    "explanation": "Серная кислота двухосновная: на одну её молекулу нужны две формульные единицы NaOH. Уравнение: H₂SO₄ + 2NaOH → Na₂SO₄ + 2H₂O."
+  },
+  {
+    "id": "grade-8-compounds-025",
+    "grade": 8,
+    "topic": "grade-8-compounds",
+    "text": "Какая формула соответствует нитрату кальция?",
+    "options": [
+      "CaNO₃",
+      "Ca₂NO₃",
+      "Ca(NO₂)₂",
+      "Ca(NO₃)₂"
+    ],
+    "correctIndex": 3,
+    "explanation": "Катион Ca²⁺ требует двух анионов NO₃⁻. Поэтому нитрат кальция записывают как Ca(NO₃)₂."
+  }
+]
