@@ -55,6 +55,41 @@ export function remainingSeconds(deadline, now = Date.now()) {
   return Math.max(0, Math.ceil((deadline - now) / 1000));
 }
 
+// localStorage может быть недоступен (приватный режим, запрет сайта), поэтому всё через try.
+export const storage = {
+  get(key, fallback = null) {
+    try { const raw = localStorage.getItem(key); return raw === null ? fallback : JSON.parse(raw); } catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* прогресс просто не сохранится */ }
+  },
+};
+
+const THEME_COLORS = { light: '#f3f7f1', dark: '#07120e' };
+
+function setupTheme() {
+  const root = document.documentElement;
+  const toggle = document.querySelector('#theme-toggle');
+  const media = matchMedia('(prefers-color-scheme: dark)');
+  const current = () => root.dataset.theme || (media.matches ? 'dark' : 'light');
+  const sync = () => {
+    const theme = current();
+    toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+    // При ручном выборе обе meta получают цвет выбранной темы.
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
+      meta.content = root.dataset.theme ? THEME_COLORS[theme] : THEME_COLORS[meta.media.includes('dark') ? 'dark' : 'light'];
+    });
+  };
+  toggle.addEventListener('click', () => {
+    const next = current() === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try { localStorage.setItem('himtest-theme', next); } catch { /* тема продержится до перезагрузки */ }
+    sync();
+  });
+  media.addEventListener('change', sync);
+  sync();
+}
+
 // Все вопросы выводим как текст: JSON не может вставить HTML в страницу.
 const escapeHTML = value => String(value).replace(/[&<>"']/g, char =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -234,6 +269,7 @@ async function initialize() {
     focusHeading();
   }
 
+  setupTheme();
   document.querySelector('#continue-test').addEventListener('click', () => dialog.close());
   document.querySelector('#confirm-finish').addEventListener('click', () => finishTest(remainingSeconds(session.deadline) === 0));
   document.addEventListener('visibilitychange', updateTimer);
