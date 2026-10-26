@@ -139,6 +139,87 @@ const HERO_ART = `<svg class="hero-art" viewBox="0 0 240 240" aria-hidden="true"
   <text x="40" y="70" font-family="Unbounded, sans-serif" font-weight="700" font-size="22" fill="var(--orange)">H₂O</text>
 </svg>`;
 
+const VERDICTS = {
+  5: { title: 'Мощно!', copy: 'Химия явно на твоей стороне. Так держать.' },
+  4: { title: 'Хороший результат', copy: 'Ещё пара тренировок — и будет пятёрка.' },
+  3: { title: 'Неплохо, есть куда расти', copy: 'Загляни в разбор ниже: там самое полезное.' },
+  2: { title: 'Старт засчитан', copy: 'Ошибки — это карта того, что стоит повторить. Разберём?' },
+};
+
+// Картинка для «Поделиться»: рисуем на canvas, без библиотек и без сервера.
+export async function drawScoreCard(summary) {
+  const W = 1080, H = 1350;
+  const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H });
+  const ctx = canvas.getContext('2d');
+  await Promise.all(['700 64px Unbounded', '700 40px Manrope'].map(font => document.fonts?.load(font).catch(() => null)));
+  const display = '"Unbounded", "Manrope", sans-serif';
+  const body = '"Manrope", system-ui, sans-serif';
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#07120e');
+  bg.addColorStop(1, '#0d3b2a');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  // Пара бензольных колец на фоне.
+  ctx.strokeStyle = '#3fdb9822';
+  ctx.lineWidth = 4;
+  for (const [cx, cy, r] of [[930, 170, 110], [140, 1180, 90], [980, 1120, 60]]) {
+    ctx.beginPath();
+    for (let i = 0; i <= 6; i++) {
+      const a = Math.PI / 3 * i + Math.PI / 6;
+      ctx[i ? 'lineTo' : 'moveTo'](cx + r * Math.cos(a), cy + r * Math.sin(a));
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#c8f169';
+  ctx.font = `700 44px ${display}`;
+  ctx.fillText('ХимТест', 80, 130);
+  ctx.fillStyle = '#9fb8ab';
+  ctx.font = `700 34px ${body}`;
+  const topic = `${summary.topic.grade} класс · ${summary.topic.title}`;
+  wrapText(ctx, topic, 80, 190, W - 160, 44);
+  const cx = W / 2, cy = 590, r = 230;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 44;
+  ctx.strokeStyle = '#ffffff17';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  const ring = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  ring.addColorStop(0, '#3fdb98');
+  ring.addColorStop(1, '#c8f169');
+  ctx.strokeStyle = ring;
+  ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(.005, summary.percent / 100)); ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8f5ee';
+  ctx.font = `700 118px ${display}`;
+  ctx.fillText(`${summary.correct}/${summary.total}`, cx, cy + 40);
+  ctx.fillStyle = '#9fb8ab';
+  ctx.font = `700 44px ${body}`;
+  ctx.fillText(`${summary.percent}% верно`, cx, cy + 110);
+  ctx.fillStyle = '#e8f5ee';
+  ctx.font = `700 64px ${display}`;
+  ctx.fillText(VERDICTS[summary.grade].title, cx, 960);
+  ctx.fillStyle = '#c8f169';
+  ctx.font = `800 40px ${body}`;
+  const streak = summary.bestStreak ? ` · серия 🔥 ${summary.bestStreak}` : '';
+  ctx.fillText(`оценка ${summary.grade} · ${formatTime(summary.elapsed)}${streak}`, cx, 1040);
+  ctx.fillStyle = '#9fb8ab';
+  ctx.font = `700 34px ${body}`;
+  ctx.fillText(`${location.host}${location.pathname}`.replace(/\/$/, ''), cx, 1240);
+  return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('canvas')), 'image/png'));
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  let line = '';
+  for (const word of text.split(' ')) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, y);
+      y += lineHeight;
+      line = word;
+    } else line = test;
+  }
+  ctx.fillText(line, x, y);
+}
+
 // Все вопросы выводим как текст: JSON не может вставить HTML в страницу.
 const escapeHTML = value => String(value).replace(/[&<>"']/g, char =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -386,18 +467,72 @@ async function initialize() {
     const result = calculateResult(session.questions, session.answers);
     const mistakes = session.questions.map((q, i) => ({ q, answer: session.answers[i], number: i + 1 }))
       .filter(({ q, answer }) => answer !== q.correctIndex);
-    main.innerHTML = `<section class="result-shell"><div class="result-card"><p class="eyebrow">${escapeHTML(session.topic.title)}</p>
-      <h1 tabindex="-1" data-focus>${timedOut ? 'Время вышло' : 'Тест завершён'}</h1><p>${result.grade === 5 ? 'Отличная работа! Продолжай исследовать химию.' : 'Каждый вопрос — шаг к пониманию. Посмотрим, что можно закрепить.'}</p>
-      <div class="score">${result.correct} <small>из ${result.total}</small></div>
-      <div class="result-stats"><div><strong>${result.percent}%</strong><span>правильных ответов</span></div><div><strong>${result.grade}</strong><span>оценка из 5</span></div><div><strong>${formatTime(elapsed)}</strong><span>затраченное время</span></div></div>
-      <div class="result-actions"><button class="button primary" data-retry>Пройти заново ↗</button><button class="button secondary" data-home>Другая тема</button></div></div>
-      <div class="review-heading"><h2>Разберёмся вместе <span class="pill">${mistakes.length}</span></h2><p>${mistakes.length ? 'Все ошибки и пропущенные вопросы — с объяснениями.' : 'Все ответы верны. В этом тесте разбирать ошибки не придётся!'}</p></div>
-      ${mistakes.map(({ q, answer, number }) => `<article class="review-card"><p class="review-label">Вопрос ${number} · ${answer === null ? 'Без ответа' : 'Есть над чем поработать'}</p><h3>${escapeHTML(q.text)}</h3><p class="answer-line wrong-answer"><strong>Твой ответ:</strong> ${answer === null ? 'Ответ не выбран' : escapeHTML(q.options[answer])}</p><p class="answer-line right-answer"><strong>Правильный ответ:</strong> ${escapeHTML(q.options[q.correctIndex])}</p><p class="explanation">${escapeHTML(q.explanation)}</p></article>`).join('')}
-      <p class="question-help">Тренировочная шкала: «5» — от 85%, «4» — от 65%, «3» — от 45%, «2» — ниже 45%.</p></section>`;
+    const verdict = VERDICTS[result.grade];
+    const summary = { ...result, elapsed, bestStreak: session.bestStreak, topic: session.topic, timedOut };
+    main.innerHTML = `<section class="result" aria-labelledby="result-title">
+      <div class="score-card grade-${result.grade}" id="score-card">
+        <div class="score-card-top"><span class="chip">${icon(TOPIC_ICONS[session.topic.id])} ${session.topic.grade} класс · ${escapeHTML(session.topic.title)}</span></div>
+        <div class="score-ring" role="img" aria-label="${result.correct} правильных из ${result.total}, ${result.percent}%">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="ring-bg"/><circle cx="60" cy="60" r="52" class="ring-fg" pathLength="100" style="stroke-dasharray:${result.percent} 100"/></svg>
+          <div class="score-ring-text" aria-hidden="true"><strong>${result.correct}<span>/${result.total}</span></strong><small>${result.percent}%</small></div>
+        </div>
+        <h1 id="result-title" tabindex="-1" data-focus>${timedOut ? 'Время вышло. ' : ''}${verdict.title}</h1>
+        <p class="score-card-copy">${verdict.copy}</p>
+        <dl class="score-stats">
+          <div><dt>Оценка</dt><dd>${result.grade}</dd></div>
+          <div><dt>Время</dt><dd>${formatTime(elapsed)}</dd></div>
+          <div><dt>Лучшая серия</dt><dd>${session.bestStreak ? `🔥 ${session.bestStreak}` : '—'}</dd></div>
+        </dl>
+        <div id="reward"></div>
+        <p class="score-card-brand">${icon('atom')} ХимТест · химия по шагам</p>
+      </div>
+      <div class="result-actions">
+        <button class="button primary" type="button" data-retry>${icon('retry')} Ещё раз</button>
+        <button class="button secondary" type="button" data-share>${icon('share')} Поделиться</button>
+        <button class="button secondary" type="button" data-home>${icon('grid')} Все темы</button>
+      </div>
+      <section class="review" aria-labelledby="review-title">
+        <h2 id="review-title" class="section-title">Разбор ошибок <span class="count-pill">${mistakes.length}</span></h2>
+        ${mistakes.length ? `<p class="review-lead">Нажми на вопрос, чтобы увидеть, почему так.</p>
+        <div class="review-list">${mistakes.map(({ q, answer, number }) => `<details class="review-item">
+          <summary><span class="review-num ${answer === null ? 'is-skip' : ''}">${number}</span><span class="review-q">${escapeHTML(q.text)}</span>${icon('chevron', 'review-chevron')}</summary>
+          <div class="review-body">
+            <p class="review-line is-wrong">${icon(answer === null ? 'clock' : 'cross')}<span><small>Твой ответ</small>${answer === null ? 'Без ответа' : escapeHTML(q.options[answer])}</span></p>
+            <p class="review-line is-right">${icon('check')}<span><small>Правильный ответ</small>${escapeHTML(q.options[q.correctIndex])}</span></p>
+            <p class="review-why">${icon('bulb')}<span><small>Почему так</small>${escapeHTML(q.explanation)}</span></p>
+          </div></details>`).join('')}</div>` : `<div class="perfect">${icon('trophy')}<p><strong>Ни одной ошибки.</strong> Разбирать нечего — можно брать тему посложнее.</p></div>`}
+      </section>
+      <p class="scale-note">Тренировочная шкала: «5» — от 85%, «4» — от 65%, «3» — от 45%, «2» — ниже 45%.</p></section>`;
     main.querySelector('[data-retry]').addEventListener('click', () => startTest(lastTopic));
     main.querySelector('[data-home]').addEventListener('click', () => { session = null; showHome(true); });
+    main.querySelector('[data-share]').addEventListener('click', event => shareResult(summary, event.currentTarget));
     announcer.textContent = `${timedOut ? 'Время вышло.' : 'Тест завершён.'} Правильных ответов: ${result.correct} из ${result.total}. Оценка: ${result.grade}.`;
     focusHeading();
+  }
+
+  async function shareResult(summary, button) {
+    const url = location.origin + location.pathname;
+    const text = `ХимТест: ${summary.correct} из ${summary.total} (${summary.percent}%) — «${summary.topic.title}», ${summary.topic.grade} класс. Попробуй сам:`;
+    button.disabled = true;
+    try {
+      const blob = await drawScoreCard(summary);
+      const file = new File([blob], 'himtest-result.png', { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Мой результат в ХимТесте', text: `${text} ${url}` });
+      } else if (navigator.share) {
+        await navigator.share({ title: 'Мой результат в ХимТесте', text, url });
+      } else {
+        // Без Web Share (обычно ноутбук) — сохраняем картинку файлом.
+        const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'himtest-result.png' });
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        announcer.textContent = 'Картинка с результатом сохранена.';
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') { console.error(error); announcer.textContent = 'Поделиться не получилось.'; }
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function showError(message) {
