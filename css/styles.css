@@ -1323,6 +1323,208 @@ kbd {
   }
 }
 
+/* ============ Геймификация ============ */
+.level-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  height:40px;
+  padding:0 14px;
+  border-radius:var(--r-pill);
+  background:var(--violet-soft);
+  color:var(--violet);
+  font-size:var(--fs-s);
+  font-weight:800;
+  white-space:nowrap;
+}
+.progress-panel {
+  margin:var(--sp-4) 0 var(--sp-6);
+  padding:var(--sp-4);
+  border-radius:var(--r-xl);
+  background:var(--surface-glass);
+  border:1px solid var(--line);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  box-shadow:var(--shadow-1);
+}
+.level-row {
+  display:flex;
+  align-items:center;
+  gap:var(--sp-3);
+}
+.level-badge {
+  flex-shrink:0;
+  width:56px;
+  height:56px;
+  border-radius:18px;
+  display:grid;
+  place-items:center;
+  font-family:var(--font-display);
+  font-size:1.5rem;
+  font-weight:700;
+  color:#fff;
+  background:linear-gradient(140deg,var(--violet),#8f7bff);
+  box-shadow:0 10px 24px -10px var(--violet);
+}
+:root[data-theme=dark] .level-badge {
+  color:#140f33;
+}
+@media (prefers-color-scheme:dark) {
+  :root:not([data-theme=light]) .level-badge {
+    color:#140f33;
+  }
+}
+.level-info {
+  flex:1;
+  min-width:0;
+}
+.level-info h2 {
+  font-size:var(--fs-l);
+  margin-bottom:6px;
+}
+.xp-bar {
+  height:10px;
+  border-radius:var(--r-pill);
+  background:var(--surface-2);
+  overflow:hidden;
+}
+.xp-bar span {
+  display:block;
+  height:100%;
+  min-width:10px;
+  border-radius:inherit;
+  background:linear-gradient(90deg,var(--violet),var(--accent));
+  transition:width .8s var(--ease-out);
+}
+.xp-text {
+  margin:6px 0 0;
+  font-size:var(--fs-xs);
+  font-weight:700;
+  color:var(--muted);
+}
+.mini-stats {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:var(--sp-2);
+  margin:var(--sp-4) 0;
+}
+.mini-stats div {
+  padding:8px 10px;
+  border-radius:var(--r-s);
+  background:var(--surface-2);
+}
+.mini-stats dt {
+  font-size:var(--fs-xs);
+  font-weight:700;
+  color:var(--muted);
+}
+.mini-stats dd {
+  margin:0;
+  font-weight:800;
+}
+.badges {
+  list-style:none;
+  margin:0;
+  padding:0 0 4px;
+  display:flex;
+  gap:var(--sp-2);
+  overflow-x:auto;
+  scroll-snap-type:x mandatory;
+  scrollbar-width:none;
+}
+.badge {
+  /* relative — иначе .sr-only внутри вылезает из прокрутки и раздвигает страницу. */
+  position:relative;
+  flex:0 0 auto;
+  width:84px;
+  scroll-snap-align:start;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  padding:10px 4px;
+  border-radius:var(--r-m);
+  border:1px dashed var(--line-strong);
+  text-align:center;
+  color:var(--muted);
+}
+.badge-emoji {
+  font-size:1.6rem;
+  line-height:1;
+  filter:grayscale(1);
+  opacity:.55;
+}
+.badge-name {
+  font-size:.68rem;
+  font-weight:800;
+  line-height:1.2;
+}
+.badge.is-earned {
+  border-style:solid;
+  border-color:transparent;
+  background:var(--orange-soft);
+  color:var(--ink);
+}
+.badge.is-earned .badge-emoji {
+  filter:none;
+  opacity:1;
+}
+.reset-progress {
+  display:block;
+  margin:var(--sp-2) auto 0;
+  font-size:var(--fs-xs);
+}
+.record {
+  color:var(--orange);
+}
+.reward {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:var(--sp-2);
+  margin-bottom:var(--sp-3);
+}
+.reward-xp,.reward-tag {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 14px;
+  border-radius:var(--r-pill);
+  font-weight:800;
+  font-size:var(--fs-s);
+}
+.reward-xp {
+  background:#c8f169;
+  color:#13300f;
+}
+.reward-tag {
+  background:#ffffff14;
+  border:1px solid #ffffff24;
+}
+.new-badges {
+  list-style:none;
+  padding:0;
+  margin:0 0 var(--sp-4);
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:var(--sp-2);
+}
+.new-badges li {
+  padding:6px 12px;
+  border-radius:var(--r-pill);
+  background:#ffad6b26;
+  color:#ffd2ae;
+  font-weight:800;
+  font-size:var(--fs-s);
+}
+@media (max-width:560px) {
+  .level-chip {
+    height:var(--tap);
+    padding:0 12px;
+  }
+}
+
 /* ============ Движение ============ */
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after {

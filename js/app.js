@@ -55,6 +55,60 @@ export function remainingSeconds(deadline, now = Date.now()) {
   return Math.max(0, Math.ceil((deadline - now) / 1000));
 }
 
+// Геймификация: всё считается и хранится только на устройстве.
+export const BADGES = [
+  { id: 'first', emoji: '🧪', title: 'Первый опыт', hint: 'Пройди первый тест' },
+  { id: 'streak5', emoji: '⚡', title: 'Цепная реакция', hint: 'Серия из 5 верных ответов' },
+  { id: 'streak10', emoji: '🔥', title: 'Катализатор', hint: 'Серия из 10 верных ответов' },
+  { id: 'excellent', emoji: '⭐', title: 'Пятёрка', hint: 'Получи оценку 5' },
+  { id: 'perfect', emoji: '💎', title: 'Чистое вещество', hint: 'Тест без единой ошибки' },
+  { id: 'explorer', emoji: '🔭', title: 'Исследователь', hint: 'Пройди 3 разные темы' },
+  { id: 'allGrades', emoji: '🧬', title: 'Полный ряд', hint: 'Темы всех классов с 6 по 11' },
+];
+
+export const emptyProgress = () => ({ xp: 0, tests: 0, bestStreak: 0, best: {}, badges: [], grades: [] });
+
+export function xpForTest({ correct, total, grade }, bestStreak) {
+  return correct * 10 + 10 + (bestStreak >= 5 ? 20 : 0) + (grade === 5 ? 30 : 0) + (total && correct === total ? 50 : 0);
+}
+
+// Уровень n начинается с 100·n·(n−1)/2 XP: 0, 100, 300, 600, 1000…
+export function levelFromXP(xp) {
+  let level = 1;
+  while (100 * (level + 1) * level / 2 <= xp) level++;
+  const start = 100 * level * (level - 1) / 2;
+  const next = 100 * (level + 1) * level / 2;
+  return { level, start, next, progress: (xp - start) / (next - start) };
+}
+
+export function applyTest(previous, summary) {
+  const progress = { ...emptyProgress(), ...previous };
+  const gained = xpForTest(summary, summary.bestStreak);
+  const before = levelFromXP(progress.xp).level;
+  const record = progress.best[summary.topicId];
+  const next = {
+    xp: progress.xp + gained,
+    tests: progress.tests + 1,
+    bestStreak: Math.max(progress.bestStreak, summary.bestStreak),
+    best: { ...progress.best, [summary.topicId]: Math.max(record ?? 0, summary.percent) },
+    grades: [...new Set([...progress.grades, summary.schoolClass])].sort((a, b) => a - b),
+    badges: [...progress.badges],
+  };
+  const earned = {
+    first: true,
+    streak5: summary.bestStreak >= 5,
+    streak10: summary.bestStreak >= 10,
+    excellent: summary.grade === 5,
+    perfect: summary.total > 0 && summary.correct === summary.total,
+    explorer: Object.keys(next.best).length >= 3,
+    allGrades: next.grades.length >= 6,
+  };
+  const newBadges = BADGES.filter(badge => earned[badge.id] && !next.badges.includes(badge.id));
+  next.badges.push(...newBadges.map(badge => badge.id));
+  return { progress: next, gained, newBadges, levelUp: levelFromXP(next.xp).level > before,
+    newRecord: record !== undefined && summary.percent > record };
+}
+
 // localStorage может быть недоступен (приватный режим, запрет сайта), поэтому всё через try.
 export const storage = {
   get(key, fallback = null) {
@@ -236,6 +290,37 @@ async function initialize() {
   let timerId = null;
   let lastTopic = null;
   let screen = 'home';
+  const PROGRESS_KEY = 'himtest-progress';
+  let progress = { ...emptyProgress(), ...storage.get(PROGRESS_KEY, {}) };
+
+  function renderHeaderStats() {
+    const { level } = levelFromXP(progress.xp);
+    document.querySelector('#header-stats').innerHTML = progress.tests
+      ? `<span class="level-chip" title="${progress.xp} XP">${icon('star')} Ур. ${level}</span>` : '';
+  }
+
+  function progressPanelHTML() {
+    if (!progress.tests) return `<ol class="steps" aria-label="Как это работает">
+        <li><span class="step-num">1</span><span><strong>Класс</strong>выбери свой</span></li>
+        <li><span class="step-num">2</span><span><strong>Тема</strong>что повторим</span></li>
+        <li><span class="step-num">3</span><span><strong>20 минут</strong>и сразу разбор</span></li>
+      </ol>`;
+    const lvl = levelFromXP(progress.xp);
+    return `<section class="progress-panel" aria-labelledby="progress-title">
+        <div class="level-row">
+          <span class="level-badge" aria-hidden="true">${lvl.level}</span>
+          <div class="level-info"><h2 id="progress-title">Уровень ${lvl.level}</h2>
+            <div class="xp-bar" role="progressbar" aria-label="Опыт до следующего уровня" aria-valuemin="${lvl.start}" aria-valuemax="${lvl.next}" aria-valuenow="${progress.xp}"><span style="width:${Math.round(lvl.progress * 100)}%"></span></div>
+            <p class="xp-text">${progress.xp} XP · до уровня ${lvl.level + 1} ещё ${lvl.next - progress.xp}</p></div>
+        </div>
+        <dl class="mini-stats"><div><dt>Тестов</dt><dd>${progress.tests}</dd></div><div><dt>Рекорд серии</dt><dd>🔥 ${progress.bestStreak}</dd></div><div><dt>Бейджи</dt><dd>${progress.badges.length}/${BADGES.length}</dd></div></dl>
+        <ul class="badges" aria-label="Бейджи">${BADGES.map(badge => {
+          const got = progress.badges.includes(badge.id);
+          return `<li class="badge ${got ? 'is-earned' : ''}" title="${badge.hint}"><span class="badge-emoji" aria-hidden="true">${got ? badge.emoji : '🔒'}</span><span class="badge-name">${badge.title}</span><span class="sr-only">${got ? 'получен' : `не получен: ${badge.hint}`}</span></li>`;
+        }).join('')}</ul>
+        <button class="text-button reset-progress" type="button" id="reset-progress">Сбросить прогресс</button>
+      </section>`;
+  }
 
   function focusHeading() {
     const heading = main.querySelector('[data-focus]');
@@ -266,11 +351,7 @@ async function initialize() {
         </div>
         ${HERO_ART}
       </section>
-      <ol class="steps" aria-label="Как это работает">
-        <li><span class="step-num">1</span><span><strong>Класс</strong>выбери свой</span></li>
-        <li><span class="step-num">2</span><span><strong>Тема</strong>что повторим</span></li>
-        <li><span class="step-num">3</span><span><strong>20 минут</strong>и сразу разбор</span></li>
-      </ol>
+      ${progressPanelHTML()}
       <section class="choose" aria-labelledby="choose-title">
         <h2 id="choose-title" class="section-title">Что изучим сегодня?</h2>
         <div class="grade-tabs" role="group" aria-label="Выбери класс">${[6,7,8,9,10,11].map(grade => `<button class="grade-tab" type="button" data-grade="${grade}" aria-pressed="${grade === selectedGrade}" aria-label="${grade} класс">${grade}<small>класс</small></button>`).join('')}</div>
@@ -279,7 +360,7 @@ async function initialize() {
             <div class="topic-head"><span class="topic-icon">${icon(TOPIC_ICONS[topic.id])}</span><span class="topic-tag">Тема ${i + 1}</span></div>
             <h3>${escapeHTML(topic.title)}</h3>
             <p class="topic-description">${escapeHTML(topic.description)}</p>
-            <p class="topic-meta"><span>${icon('grid')} ${Math.min(20, topic.count)} из ${topic.count}</span><span>${icon('clock')} 20 мин</span></p>
+            <p class="topic-meta"><span>${icon('grid')} ${Math.min(20, topic.count)} из ${topic.count}</span><span>${icon('clock')} 20 мин</span>${progress.best[topic.id] !== undefined ? `<span class="record">${icon('trophy')} Рекорд ${progress.best[topic.id]}%</span>` : ''}</p>
             <button class="button primary topic-start" type="button" data-start="${escapeHTML(topic.id)}" aria-label="Начать тест: ${escapeHTML(topic.title)}">Погнали ${icon('arrowRight')}</button>
           </article>` : '').join('') || `<div class="empty-state"><h3>Этот класс скоро подъедет</h3><p>Вопросы пока готовятся. Здесь появятся:</p><ul>${topics.map(topic => `<li>${escapeHTML(topic.title)}</li>`).join('')}</ul></div>`}</div>
       </section>
@@ -292,6 +373,14 @@ async function initialize() {
       announcer.textContent = `${selectedGrade} класс. Доступно тем: ${available}.`;
     }));
     main.querySelectorAll('[data-start]').forEach(button => button.addEventListener('click', () => startTest(button.dataset.start)));
+    main.querySelector('#reset-progress')?.addEventListener('click', () => {
+      if (!confirm('Сбросить уровень, XP, бейджи и рекорды на этом устройстве?')) return;
+      progress = emptyProgress();
+      storage.set(PROGRESS_KEY, progress);
+      renderHeaderStats();
+      showHome(true);
+      announcer.textContent = 'Прогресс сброшен.';
+    });
     if (moveFocus) focusHeading();
   }
 
@@ -469,6 +558,10 @@ async function initialize() {
       .filter(({ q, answer }) => answer !== q.correctIndex);
     const verdict = VERDICTS[result.grade];
     const summary = { ...result, elapsed, bestStreak: session.bestStreak, topic: session.topic, timedOut };
+    const reward = applyTest(progress, { ...summary, topicId: session.topic.id, schoolClass: session.topic.grade });
+    progress = reward.progress;
+    storage.set(PROGRESS_KEY, progress);
+    renderHeaderStats();
     main.innerHTML = `<section class="result" aria-labelledby="result-title">
       <div class="score-card grade-${result.grade}" id="score-card">
         <div class="score-card-top"><span class="chip">${icon(TOPIC_ICONS[session.topic.id])} ${session.topic.grade} класс · ${escapeHTML(session.topic.title)}</span></div>
@@ -483,7 +576,12 @@ async function initialize() {
           <div><dt>Время</dt><dd>${formatTime(elapsed)}</dd></div>
           <div><dt>Лучшая серия</dt><dd>${session.bestStreak ? `🔥 ${session.bestStreak}` : '—'}</dd></div>
         </dl>
-        <div id="reward"></div>
+        <div class="reward">
+          <span class="reward-xp">+${reward.gained} XP</span>
+          ${reward.levelUp ? `<span class="reward-tag">${icon('star')} Новый уровень: ${levelFromXP(progress.xp).level}</span>` : ''}
+          ${reward.newRecord ? `<span class="reward-tag">${icon('trophy')} Новый рекорд темы</span>` : ''}
+        </div>
+        ${reward.newBadges.length ? `<ul class="new-badges" aria-label="Новые бейджи">${reward.newBadges.map(badge => `<li><span aria-hidden="true">${badge.emoji}</span> ${badge.title}</li>`).join('')}</ul>` : ''}
         <p class="score-card-brand">${icon('atom')} ХимТест · химия по шагам</p>
       </div>
       <div class="result-actions">
@@ -506,7 +604,7 @@ async function initialize() {
     main.querySelector('[data-retry]').addEventListener('click', () => startTest(lastTopic));
     main.querySelector('[data-home]').addEventListener('click', () => { session = null; showHome(true); });
     main.querySelector('[data-share]').addEventListener('click', event => shareResult(summary, event.currentTarget));
-    announcer.textContent = `${timedOut ? 'Время вышло.' : 'Тест завершён.'} Правильных ответов: ${result.correct} из ${result.total}. Оценка: ${result.grade}.`;
+    announcer.textContent = `${timedOut ? 'Время вышло.' : 'Тест завершён.'} Правильных ответов: ${result.correct} из ${result.total}. Оценка: ${result.grade}. Получено ${reward.gained} XP.${reward.newBadges.length ? ` Новые бейджи: ${reward.newBadges.map(b => b.title).join(', ')}.` : ''}`;
     focusHeading();
   }
 
@@ -550,6 +648,7 @@ async function initialize() {
     if (session && !session.ended) { event.preventDefault(); event.returnValue = ''; }
   });
   try {
+    renderHeaderStats();
     catalog = await loadJSON('./data/topics.json');
     showHome();
   } catch (error) {
