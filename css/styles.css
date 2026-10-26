@@ -1526,6 +1526,73 @@ kbd {
 }
 
 /* ============ Движение ============ */
+.confetti {
+  position:fixed;
+  inset:0;
+  z-index:30;
+  pointer-events:none;
+  overflow:hidden;
+}
+.confetti span {
+  position:absolute;
+  top:0;
+}
+.confetti-emoji {
+  font-size:22px;
+}
+.confetti-bit {
+  width:9px;
+  height:14px;
+  border-radius:3px;
+}
+@media (prefers-reduced-motion:no-preference) {
+  .hero-art .orbit {
+    animation:spin 14s linear infinite;
+  }
+  .hero-art .bubble {
+    animation:rise 3.2s ease-in infinite;
+  }
+  .hero-art .b2 {
+    animation-delay:1.1s;
+  }
+  .hero-art .b3 {
+    animation-delay:2.1s;
+  }
+  .timer.urgent {
+    animation:pulse 1s ease-in-out infinite;
+  }
+  .score-ring .ring-fg {
+    animation:ring 1.1s var(--ease-out) both;
+  }
+  @keyframes spin {
+    to {
+      transform:rotate(360deg);
+    }
+  }
+  @keyframes rise {
+    0% {
+      transform:translateY(0);
+      opacity:0;
+    }
+    20% {
+      opacity:.9;
+    }
+    100% {
+      transform:translateY(-46px);
+      opacity:0;
+    }
+  }
+  @keyframes pulse {
+    50% {
+      box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 22%,transparent);
+    }
+  }
+  @keyframes ring {
+    from {
+      stroke-dasharray:0 100;
+    }
+  }
+}
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after {
     animation-duration:.01ms!important;

@@ -274,6 +274,39 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   ctx.fillText(line, x, y);
 }
 
+// Конфетти из колб и искр при хорошем результате; без библиотек.
+function celebrate() {
+  if (!motionOK()) return;
+  const layer = Object.assign(document.createElement('div'), { className: 'confetti' });
+  layer.setAttribute('aria-hidden', 'true');
+  const pieces = ['🧪', '⚗️', '✨', '⭐', '', '', '', '', '', ''];
+  const colors = ['var(--accent)', 'var(--lime)', 'var(--violet)', 'var(--orange)'];
+  for (let i = 0; i < 46; i++) {
+    const el = document.createElement('span');
+    const emoji = pieces[i % pieces.length];
+    if (emoji) el.textContent = emoji;
+    else el.style.background = colors[i % colors.length];
+    el.className = emoji ? 'confetti-emoji' : 'confetti-bit';
+    el.style.left = `${Math.random() * 100}%`;
+    layer.append(el);
+    const drift = (Math.random() - .5) * 220;
+    el.animate([
+      { transform: 'translate3d(0,-10vh,0) rotate(0deg)', opacity: 1 },
+      { transform: `translate3d(${drift}px,105vh,0) rotate(${(Math.random() - .5) * 900}deg)`, opacity: .9 }],
+    { duration: 1800 + Math.random() * 1400, delay: Math.random() * 400, easing: 'cubic-bezier(.2,.6,.4,1)', fill: 'forwards' });
+  }
+  document.body.append(layer);
+  setTimeout(() => layer.remove(), 3800);
+}
+
+// Мягкое появление нового экрана.
+function enter(root) {
+  if (!motionOK()) return;
+  [...root.children].slice(0, 6).forEach((el, i) => el.animate(
+    [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }],
+    { duration: 380, delay: i * 50, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' }));
+}
+
 // Все вопросы выводим как текст: JSON не может вставить HTML в страницу.
 const escapeHTML = value => String(value).replace(/[&<>"']/g, char =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -339,7 +372,7 @@ async function initialize() {
     document.body.dataset.screen = name;
   }
 
-  function showHome(moveFocus = false) {
+  function showHome(moveFocus = false, animate = true) {
     setScreen('home');
     const topics = catalog.filter(topic => topic.grade === selectedGrade);
     main.innerHTML = `
@@ -367,7 +400,7 @@ async function initialize() {
       <aside class="note-card">${icon('bulb')}<p><strong>Ошибаться — норм.</strong> После теста покажем правильные ответы и объясним почему. Это тренировка, а не контрольная. Тем в тренажёре: ${catalog.filter(item => item.file).length}. Вопросы авторские, их стоит сверить с учителем химии.</p></aside>`;
     main.querySelectorAll('[data-grade]').forEach(button => button.addEventListener('click', () => {
       selectedGrade = Number(button.dataset.grade);
-      showHome();
+      showHome(false, false);
       main.querySelector(`[data-grade="${selectedGrade}"]`).focus({ preventScroll: true });
       const available = catalog.filter(topic => topic.grade === selectedGrade && topic.file).length;
       announcer.textContent = `${selectedGrade} класс. Доступно тем: ${available}.`;
@@ -382,6 +415,7 @@ async function initialize() {
       announcer.textContent = 'Прогресс сброшен.';
     });
     if (moveFocus) focusHeading();
+    if (animate) enter(main);
   }
 
   async function startTest(topicId) {
@@ -606,6 +640,8 @@ async function initialize() {
     main.querySelector('[data-share]').addEventListener('click', event => shareResult(summary, event.currentTarget));
     announcer.textContent = `${timedOut ? 'Время вышло.' : 'Тест завершён.'} Правильных ответов: ${result.correct} из ${result.total}. Оценка: ${result.grade}. Получено ${reward.gained} XP.${reward.newBadges.length ? ` Новые бейджи: ${reward.newBadges.map(b => b.title).join(', ')}.` : ''}`;
     focusHeading();
+    enter(main);
+    if (result.grade >= 4) celebrate();
   }
 
   async function shareResult(summary, button) {

@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Исходник превью для соцсетей. PNG: см. README, раздел «Превью для ссылок». -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Unbounded:wght@700&display=block">
+<style>
+  html,body{margin:0;width:1200px;height:630px;overflow:hidden}
+  body{font-family:Manrope,sans-serif;color:#e8f5ee;position:relative;
+    background:radial-gradient(70% 90% at 100% 0%,#3fdb9840,transparent 60%),radial-gradient(60% 70% at 0% 100%,#7c6bff3a,transparent 60%),linear-gradient(160deg,#0b241b,#07120e)}
+  .pattern{position:absolute;inset:0;opacity:.09}
+  .text{position:absolute;left:80px;top:96px;width:640px}
+  .logo{display:flex;align-items:center;gap:16px;font:700 34px Unbounded}
+  .mark{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(140deg,#3fdb98,#17634b)}
+  h1{font:700 76px/1.05 Unbounded;margin:48px 0 24px;letter-spacing:-.02em}
+  h1 span{color:#c8f169}
+  p{font-size:30px;font-weight:700;color:#b9cfc3;margin:0}
+  .chips{display:flex;gap:12px;margin-top:36px}
+  .chip{padding:10px 20px;border-radius:999px;background:#ffffff14;border:1px solid #ffffff24;font-size:22px;font-weight:800}
+  .art{position:absolute;right:70px;top:110px;width:400px}
+</style>
+</head>
+<body>
+<svg class="pattern" width="1200" height="630"><defs><pattern id="p" width="180" height="156" patternUnits="userSpaceOnUse"><g fill="none" stroke="#3fdb98" stroke-width="1.6"><path d="M40 18l22 12.7v25.4L40 68.8 18 56.1V30.7z"/><path d="M62 56.1l26 15"/><path d="M128 86l22 12.7v25.4L128 136.8l-22-12.7V98.7z"/></g><circle cx="88" cy="71" r="3.4" fill="#3fdb98"/></pattern></defs><rect width="1200" height="630" fill="url(#p)"/></svg>
+<div class="text">
+  <div class="logo"><span class="mark"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#042418" stroke-width="2"><ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(120 12 12)"/><circle cx="12" cy="12" r="1.6" fill="#042418"/></svg></span>ХимТест</div>
+  <h1>Химия без зубрёжки. <span>Погнали?</span></h1>
+  <p>Тренажёр по химии для 6–11 класса</p>
+  <div class="chips"><span class="chip">20 вопросов</span><span class="chip">20 минут</span><span class="chip">разбор ошибок</span></div>
+</div>
+<svg class="art" viewBox="0 0 240 240">
+  <defs><linearGradient id="l" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c8f169"/><stop offset="1" stop-color="#3fdb98"/></linearGradient></defs>
+  <circle cx="120" cy="128" r="96" fill="#0f3324"/>
+  <g><ellipse cx="184" cy="56" rx="34" ry="13" fill="none" stroke="#b0a3ff" stroke-width="3"/><ellipse cx="184" cy="56" rx="34" ry="13" transform="rotate(60 184 56)" fill="none" stroke="#b0a3ff" stroke-width="3"/><circle cx="184" cy="56" r="6" fill="#b0a3ff"/></g>
+  <path d="M96 46h48v10h-7v44l44 78a15 15 0 0 1-13 22H72a15 15 0 0 1-13-22l44-78V56h-7z" fill="#0f1f19" stroke="#e8f5ee" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M84 138h72l23 41a9 9 0 0 1-8 13H69a9 9 0 0 1-8-13z" fill="url(#l)"/>
+  <circle cx="104" cy="170" r="7" fill="#0f1f19" opacity=".8"/><circle cx="132" cy="160" r="5" fill="#0f1f19" opacity=".8"/><circle cx="120" cy="182" r="4" fill="#0f1f19" opacity=".8"/>
+  <path d="M108 46h24" stroke="#e8f5ee" stroke-width="4" stroke-linecap="round"/>
+</svg>
+</body>
+</html>
