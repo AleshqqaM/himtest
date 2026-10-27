@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { prepareQuestions, validateBank, calculateResult, formatTime, remainingSeconds, shuffle, TEST_SECONDS, levelFromXP, xpForTest, applyTest, emptyProgress, BADGES } from '../js/app.js';
+import { validateExamBank, prepareVariant, scoreTask, toBlank, isComplete, emptyResponse, examGrade } from '../js/exam.js';
 const root = new URL('../', import.meta.url);
 const catalog = JSON.parse(await readFile(new URL('data/topics.json', root)));
 let count = 0;
@@ -82,4 +83,37 @@ for (const [topicId, schoolClass] of [['t2', 7], ['t3', 8], ['t4', 9], ['t5', 10
 assert.ok(step.progress.badges.includes('explorer') && step.progress.badges.includes('allGrades'));
 assert.equal(new Set(step.progress.badges).size, step.progress.badges.length);
 assert.equal(BADGES.length, 7);
-console.log(`OK: ${count} вопросов; ${runs} случайных тестов; правильные ответы после перемешивания; пропуски; границы оценок; короткий банк; расчёт таймера; XP, уровни и бейджи.`);
+// Режим ОГЭ: банк, вариант, баллы.
+const meta = JSON.parse(await readFile(new URL('data/oge/meta.json', root)));
+const ogeBank = validateExamBank(JSON.parse(await readFile(new URL(meta.bank, root))), meta);
+assert.equal(meta.numbers.reduce((sum, item) => sum + item.points, 0), 24);
+assert.equal(new Set(ogeBank.map(task => task.text + JSON.stringify(task.options ?? task.items ?? task.rows))).size, ogeBank.length);
+for (const { n } of meta.numbers) assert.ok(ogeBank.filter(task => task.n === n).length >= 3, `мало заданий №${n}`);
+// Правильный ответ, собранный «как в интерфейсе», даёт полный балл.
+const solve = task => task.type === 'number' ? task.answer.replace('.', ',')
+  : [...task.answer].map(Number);
+for (const task of ogeBank) {
+  const right = solve(task);
+  assert.ok(isComplete(task, right), task.id);
+  assert.equal(scoreTask(task, right), task.points, task.id);
+  assert.equal(scoreTask(task, emptyResponse(task)), 0);
+  if (task.type === 'multi') assert.equal(scoreTask(task, [...right].reverse()), task.points);
+  if (task.type === 'match' && task.points === 2) {
+    const choices = task.options ? task.options.length : task.choices;
+    const oneOff = [...right]; oneOff[0] = oneOff[0] % choices + 1;
+    assert.equal(scoreTask(task, oneOff), 1, task.id);
+    const twoOff = [...oneOff]; twoOff[1] = twoOff[1] % choices + 1;
+    assert.equal(scoreTask(task, twoOff), 0, task.id);
+  }
+}
+assert.equal(toBlank(ogeBank.find(t => t.type === 'multi'), [5, 2]), '25');
+let examRuns = 0;
+for (let run = 0; run < 200; run++, examRuns++) {
+  const variant = prepareVariant(ogeBank, meta.numbers);
+  assert.deepEqual(variant.map(task => task.n), meta.numbers.map(item => item.n));
+  assert.equal(variant.reduce((sum, task) => sum + scoreTask(task, solve(task)), 0), 24);
+}
+assert.deepEqual([0, 9, 10, 20, 21, 24, 30, 31, 38].map(points => examGrade(points, meta.scale)), [2, 2, 3, 3, 4, 4, 4, 5, 5]);
+assert.throws(() => validateExamBank([{ ...ogeBank[0], answer: '29' }], meta));
+assert.throws(() => validateExamBank(ogeBank.filter(task => task.n !== 7), meta));
+console.log(`OK: ${count} вопросов; ${runs} случайных тестов; правильные ответы после перемешивания; пропуски; границы оценок; короткий банк; расчёт таймера; XP, уровни и бейджи; ОГЭ: ${ogeBank.length} заданий, ${examRuns} вариантов, частичные баллы.`);

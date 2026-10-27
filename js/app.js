@@ -1,3 +1,5 @@
+import { MATCH_LETTERS, emptyResponse, isComplete, isStarted, toBlank, formatBlank, scoreTask, examGrade, prepareVariant, validateExamBank } from './exam.js';
+
 // Чистые функции: их можно проверить отдельно от интерфейса.
 export const TEST_SECONDS = 20 * 60;
 
@@ -41,10 +43,10 @@ export function calculateResult(questions, answers) {
   const total = questions.length;
   const percent = total ? Math.round(correct / total * 100) : 0;
   // Границы оценок сравниваем с точной долей, до округления процента.
-  const ratio = total ? correct / total : 0;
-  const grade = ratio >= .85 ? 5 : ratio >= .65 ? 4 : ratio >= .45 ? 3 : 2;
-  return { correct, total, percent, grade };
+  return { correct, total, percent, grade: gradeFromRatio(total ? correct / total : 0) };
 }
+
+export const gradeFromRatio = ratio => ratio >= .85 ? 5 : ratio >= .65 ? 4 : ratio >= .45 ? 3 : 2;
 
 export function formatTime(seconds) {
   const safe = Math.max(0, Math.floor(seconds));
@@ -170,6 +172,8 @@ const ICONS = {
   chevron: '<path d="M6 9l6 6 6-6"/>',
   bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
+  clipboard: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
 };
 const motionOK = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.flask}</svg>`;
@@ -323,6 +327,9 @@ async function initialize() {
   let timerId = null;
   let lastTopic = null;
   let screen = 'home';
+  let oge = null;
+  let exam = null;
+  let examTimerId = null;
   const PROGRESS_KEY = 'himtest-progress';
   let progress = { ...emptyProgress(), ...storage.get(PROGRESS_KEY, {}) };
 
@@ -385,6 +392,17 @@ async function initialize() {
         ${HERO_ART}
       </section>
       ${progressPanelHTML()}
+      <section class="oge-card" aria-labelledby="oge-title">
+        <div class="oge-card-text">
+          <p class="chip chip-violet">${icon('target')} 9 класс · задания 1–19</p>
+          <h2 id="oge-title">Готовишься к ОГЭ?</h2>
+          <p>Задания в экзаменационном формате: «два из пяти», соответствия, расчёты. Баллы — как на экзамене.</p>
+        </div>
+        <div class="oge-actions">
+          <button class="button primary" type="button" data-oge-hub>${icon('target')} Тренажёр ОГЭ</button>
+          <button class="button secondary" type="button" data-oge-variant>${icon('clipboard')} Вариант на время</button>
+        </div>
+      </section>
       <section class="choose" aria-labelledby="choose-title">
         <h2 id="choose-title" class="section-title">Что изучим сегодня?</h2>
         <div class="grade-tabs" role="group" aria-label="Выбери класс">${[6,7,8,9,10,11].map(grade => `<button class="grade-tab" type="button" data-grade="${grade}" aria-pressed="${grade === selectedGrade}" aria-label="${grade} класс">${grade}<small>класс</small></button>`).join('')}</div>
@@ -406,6 +424,8 @@ async function initialize() {
       announcer.textContent = `${selectedGrade} класс. Доступно тем: ${available}.`;
     }));
     main.querySelectorAll('[data-start]').forEach(button => button.addEventListener('click', () => startTest(button.dataset.start)));
+    main.querySelector('[data-oge-hub]').addEventListener('click', () => showOgeHub());
+    main.querySelector('[data-oge-variant]').addEventListener('click', () => startExam('variant'));
     main.querySelector('#reset-progress')?.addEventListener('click', () => {
       if (!confirm('Сбросить уровень, XP, бейджи и рекорды на этом устройстве?')) return;
       progress = emptyProgress();
@@ -669,6 +689,359 @@ async function initialize() {
     }
   }
 
+  // ============ Режим ОГЭ ============
+  const EXAM_PROGRESS = { variant: 'oge-variant', trainer: n => `oge-${n}` };
+  const FORMAT_HINT = { multi: 'выбор двух ответов', match: 'соответствие', order: 'последовательность', number: 'расчёт' };
+  const pointsWord = points => {
+    const tens = points % 100, ones = points % 10;
+    if (tens >= 11 && tens <= 14) return 'баллов';
+    return ones === 1 ? 'балл' : ones >= 2 && ones <= 4 ? 'балла' : 'баллов';
+  };
+
+  async function loadOge() {
+    if (!oge) {
+      const meta = await loadJSON('./data/oge/meta.json');
+      oge = { meta, bank: validateExamBank(await loadJSON(meta.bank), meta) };
+    }
+    return oge;
+  }
+
+  async function showOgeHub(moveFocus = true) {
+    try { await loadOge(); } catch (error) { console.error(error); showError('Не удалось загрузить задания ОГЭ. Проверьте подключение и попробуйте ещё раз.'); return; }
+    exam = null;
+    setScreen('oge');
+    const { meta, bank } = oge;
+    const maxPart = meta.numbers.reduce((sum, item) => sum + item.points, 0);
+    const best = progress.best[EXAM_PROGRESS.variant];
+    main.innerHTML = `<section class="oge-hub" aria-labelledby="oge-hub-title">
+      <button class="text-button back-link" type="button" data-home>${icon('arrowLeft')} Все темы</button>
+      <h1 id="oge-hub-title" tabindex="-1" data-focus>ОГЭ по химии: <span class="gradient-text">часть 1</span></h1>
+      <p class="hero-copy">${meta.numbers.length} заданий с кратким ответом, максимум ${maxPart} первичных балла. Тренируй номер, который проседает, или реши вариант целиком.</p>
+      <article class="variant-card">
+        <div><h2>Вариант на время</h2>
+          <p class="topic-meta"><span>${icon('grid')} ${meta.numbers.length} заданий</span><span>${icon('clock')} ${meta.partSeconds / 60} мин</span><span>${icon('star')} ${maxPart} баллов</span>${best !== undefined ? `<span class="record">${icon('trophy')} Рекорд ${best}%</span>` : ''}</p>
+          <p class="variant-copy">Как на экзамене: ответы проверим в конце, до этого их можно менять.</p></div>
+        <button class="button primary" type="button" data-oge-variant>Начать вариант ${icon('arrowRight')}</button>
+      </article>
+      <h2 class="section-title">Тренажёр по номерам</h2>
+      <ul class="task-grid">${meta.numbers.map(item => {
+        const record = progress.best[EXAM_PROGRESS.trainer(item.n)];
+        return `<li><button class="task-tile" type="button" data-task="${item.n}" aria-label="Задание ${item.n}: ${escapeHTML(item.title)}${record !== undefined ? `, рекорд ${record}%` : ''}">
+          <span class="task-num" aria-hidden="true">${item.n}</span>
+          <span class="task-info"><strong>${escapeHTML(item.title)}</strong><small>${item.points} ${pointsWord(item.points)} · ${FORMAT_HINT[item.type]} · ${bank.filter(task => task.n === item.n).length} шт.${record !== undefined ? ` · ${record}%` : ''}</small></span>
+        </button></li>`;
+      }).join('')}</ul>
+      <aside class="note-card">${icon('bulb')}<p><strong>Как считаются баллы.</strong> Задания 4, 9, 10, 12 и 17 стоят 2 балла: одна ошибка — 1 балл. По шкале ${meta.year} года «3» ставят от ${meta.scale[3]}, «4» — от ${meta.scale[4]}, «5» — от ${meta.scale[5]} первичных баллов из ${meta.maxTotal}. Задания 20–23 с развёрнутым ответом проверяет эксперт, их здесь пока нет. Задания авторские, в формате демоверсии ФИПИ.</p></aside>
+    </section>`;
+    main.querySelector('[data-home]').addEventListener('click', () => showHome(true));
+    main.querySelector('[data-oge-variant]').addEventListener('click', () => startExam('variant'));
+    main.querySelectorAll('[data-task]').forEach(button => button.addEventListener('click', () => startExam('trainer', Number(button.dataset.task))));
+    if (moveFocus) focusHeading();
+    enter(main);
+  }
+
+  async function startExam(mode, n = null) {
+    try { await loadOge(); } catch (error) { console.error(error); showError('Не удалось загрузить задания ОГЭ. Проверьте подключение и попробуйте ещё раз.'); return; }
+    const { meta, bank } = oge;
+    const tasks = mode === 'variant' ? prepareVariant(bank, meta.numbers) : shuffle(bank.filter(task => task.n === n));
+    const startedAt = Date.now();
+    exam = { mode, n, tasks, responses: tasks.map(emptyResponse), checked: tasks.map(() => false), index: 0,
+      startedAt, deadline: mode === 'variant' ? startedAt + meta.partSeconds * 1000 : null, ended: false, warned: false, streak: 0, bestStreak: 0 };
+    setScreen('exam');
+    announcer.textContent = mode === 'variant'
+      ? `Вариант начался. ${tasks.length} заданий, ${meta.partSeconds / 60} минут.`
+      : `Тренажёр задания ${n}. Заданий: ${tasks.length}.`;
+    showExamTask();
+    clearInterval(examTimerId);
+    if (mode === 'variant') { examTimerId = setInterval(updateExamTimer, 250); updateExamTimer(); }
+  }
+
+  const examLocked = () => exam.mode === 'trainer' && exam.checked[exam.index];
+
+  function examInputHTML(task, response, locked) {
+    const right = task.answer;
+    if (task.type === 'multi' || task.type === 'order') {
+      const list = task.type === 'multi' ? task.options : task.items;
+      return `<p class="input-hint">${task.type === 'multi' ? `Выбери ${task.pick} ответа — порядок не важен.` : 'Нажимай элементы в нужном порядке. Нажми ещё раз, чтобы убрать.'}</p>
+        <div class="options" role="group" aria-labelledby="q-text">${list.map((text, i) => {
+        const digit = i + 1;
+        const position = response.indexOf(digit);
+        const chosen = position !== -1;
+        const correct = task.type === 'multi' ? right.includes(String(digit)) : right[position] === String(digit);
+        const state = !locked ? '' : task.type === 'multi'
+          ? (correct ? 'is-correct' : chosen ? 'is-wrong' : 'is-dim')
+          : (chosen && correct ? 'is-correct' : 'is-wrong');
+        const mark = task.type === 'order' && chosen ? `<span class="order-pos">${position + 1}-й</span>` : '';
+        return `<button class="option ${state}" type="button" data-pick="${digit}" aria-pressed="${chosen}" ${locked ? 'aria-disabled="true"' : ''}>
+          <span class="option-key" aria-hidden="true">${digit}</span><span class="option-text">${escapeHTML(text)}</span>${mark}
+          <span class="option-mark" aria-hidden="true">${state === 'is-correct' ? icon('check') : state === 'is-wrong' && chosen ? icon('cross') : ''}</span></button>`;
+      }).join('')}</div>
+        ${task.type === 'order' && response.length && !locked ? '<button class="text-button" type="button" data-clear>Сбросить порядок</button>' : ''}`;
+    }
+    if (task.type === 'match') {
+      const choices = task.options ? task.options.length : task.choices;
+      return `${task.options ? `<ol class="match-options" aria-label="Варианты ответа">${task.options.map(text => `<li>${escapeHTML(text)}</li>`).join('')}</ol>` : ''}
+        <div class="match-rows">${task.rows.map((row, r) => `<div class="match-row" role="group" aria-labelledby="row-${r}">
+          <p class="match-label" id="row-${r}"><span class="match-letter">${MATCH_LETTERS[r]}</span>${escapeHTML(row)}</p>
+          <div class="digit-row">${Array.from({ length: choices }, (_, i) => {
+            const digit = i + 1;
+            const chosen = response[r] === digit;
+            const state = !locked ? '' : String(digit) === right[r] ? 'is-correct' : chosen ? 'is-wrong' : '';
+            return `<button class="digit ${state}" type="button" data-row="${r}" data-digit="${digit}" aria-pressed="${chosen}" aria-label="${MATCH_LETTERS[r]} — ${digit}" ${locked ? 'aria-disabled="true"' : ''}>${digit}</button>`;
+          }).join('')}</div></div>`).join('')}</div>`;
+    }
+    return `<label class="number-field" for="number-input"><span>Ответ</span>
+      <input id="number-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="${escapeHTML(response)}" ${locked ? 'readonly' : ''} aria-describedby="number-hint">
+      ${task.unit ? `<span class="number-unit">${escapeHTML(task.unit)}</span>` : ''}</label>
+      <p class="input-hint" id="number-hint">Только число, дробную часть — через запятую.</p>`;
+  }
+
+  function examFeedbackHTML(task, response) {
+    const got = scoreTask(task, response);
+    const full = got === task.points;
+    return `<div class="feedback ${full ? 'is-correct' : 'is-wrong'}">
+      <p class="feedback-title">${icon(full ? 'check' : 'bulb')} ${full ? pick(PRAISE) : got ? 'Почти! Один балл из двух' : pick(OOPS)}</p>
+      ${full ? '' : `<p class="feedback-answer">Правильный ответ: <strong>${formatBlank(task, task.answer)}</strong></p>`}
+      <p class="feedback-text">${escapeHTML(task.explanation)}</p></div>`;
+  }
+
+  function examNextLabel() {
+    const last = exam.index === exam.tasks.length - 1;
+    if (exam.mode === 'trainer') {
+      if (!exam.checked[exam.index]) return isComplete(exam.tasks[exam.index], exam.responses[exam.index]) ? `Проверить ${icon('check')}` : `Пропустить ${icon('arrowRight')}`;
+      return last ? `Итоги ${icon('check')}` : `Дальше ${icon('arrowRight')}`;
+    }
+    return last ? `Завершить ${icon('check')}` : `Дальше ${icon('arrowRight')}`;
+  }
+
+  function showExamTask(direction = 0, refocus = true) {
+    if (!exam || exam.ended) return;
+    if (exam.deadline && remainingSeconds(exam.deadline) === 0) { finishExam(true); return; }
+    const { tasks, responses, index, mode } = exam;
+    const task = tasks[index];
+    const response = responses[index];
+    const locked = examLocked();
+    const done = mode === 'trainer' ? exam.checked.filter(Boolean).length : responses.filter((r, i) => isComplete(tasks[i], r)).length;
+    const blank = isStarted(task, response) ? formatBlank(task, toBlank(task, response)) : '—';
+    main.innerHTML = `<section class="quiz exam" aria-label="${mode === 'variant' ? 'Вариант ОГЭ' : `Тренажёр задания ${task.n}`}">
+      <div class="quiz-top">
+        <button class="icon-button" id="finish" type="button" aria-label="Завершить досрочно">${icon('cross')}</button>
+        <div class="quiz-progress"><div class="bar" role="progressbar" aria-label="${mode === 'variant' ? 'Заданий с ответом' : 'Проверено заданий'}" aria-valuemin="0" aria-valuemax="${tasks.length}" aria-valuenow="${done}"><span style="width:${done / tasks.length * 100}%"></span></div></div>
+        <span id="streak">${exam.streak >= 2 ? `<span class="streak-chip" aria-label="Серия верных ответов: ${exam.streak}"><span aria-hidden="true">🔥</span> ${exam.streak}</span>` : ''}</span>
+        ${mode === 'variant' ? `<div class="timer" role="timer" aria-live="off" aria-label="Осталось времени">${icon('clock')}<span id="time-value">${formatTime(remainingSeconds(exam.deadline))}</span></div>` : ''}
+      </div>
+      <div class="question-card" id="question-card">
+        <p class="q-meta"><span>Задание ${task.n} <span class="q-of">· ${index + 1} из ${tasks.length}</span></span><span>${task.points} ${pointsWord(task.points)} · ${FORMAT_HINT[task.type]}</span></p>
+        <h1 class="q-text" id="q-text" tabindex="-1" data-focus>${escapeHTML(task.text)}</h1>
+        ${examInputHTML(task, response, locked)}
+        <p class="blank-line">В бланк: <output class="blank-value" id="blank-value" aria-live="polite">${blank}</output></p>
+        <div id="feedback">${locked ? examFeedbackHTML(task, response) : ''}</div>
+      </div>
+      ${mode === 'variant' ? `<nav class="task-strip" aria-label="Задания варианта">${tasks.map((t, i) => `<button type="button" class="strip-cell ${isComplete(t, responses[i]) ? 'is-filled' : ''}" data-jump="${i}" ${i === index ? 'aria-current="step"' : ''} aria-label="Задание ${t.n}${isComplete(t, responses[i]) ? ', есть ответ' : ''}">${t.n}</button>`).join('')}</nav>` : ''}
+      <nav class="quiz-nav" aria-label="Навигация по заданиям">
+        <button class="button secondary" id="previous" type="button" ${index === 0 ? 'disabled' : ''} aria-label="Предыдущее задание">${icon('arrowLeft')}</button>
+        <button class="button primary" id="next" type="button">${examNextLabel()}</button>
+      </nav></section>`;
+    if (!locked) bindExamInputs(task);
+    main.querySelectorAll('[data-jump]').forEach(button => button.addEventListener('click', () => {
+      const target = Number(button.dataset.jump);
+      if (target === exam.index) return;
+      const dir = target > exam.index ? 1 : -1;
+      exam.index = target;
+      showExamTask(dir);
+    }));
+    main.querySelector('#previous').addEventListener('click', () => { exam.index--; showExamTask(-1); });
+    main.querySelector('#next').addEventListener('click', examNext);
+    main.querySelector('#finish').addEventListener('click', askFinishExam);
+    updateExamTimer();
+    if (refocus) focusHeading();
+    if (direction && motionOK()) {
+      main.querySelector('#question-card').animate([
+        { opacity: 0, transform: `translateX(${direction * 28}px)` }, { opacity: 1, transform: 'none' }],
+      { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' });
+    }
+  }
+
+  // Перерисовка после выбора: фокус возвращается на ту же кнопку.
+  function redrawExam(selector) {
+    showExamTask(0, false);
+    main.querySelector(selector)?.focus({ preventScroll: true });
+  }
+
+  function bindExamInputs(task) {
+    const response = exam.responses[exam.index];
+    main.querySelectorAll('[data-pick]').forEach(button => button.addEventListener('click', () => togglePick(Number(button.dataset.pick))));
+    main.querySelector('[data-clear]')?.addEventListener('click', () => {
+      exam.responses[exam.index] = [];
+      redrawExam('[data-pick="1"]');
+      announcer.textContent = 'Порядок сброшен.';
+    });
+    main.querySelectorAll('[data-digit]').forEach(button => button.addEventListener('click', () => {
+      const row = Number(button.dataset.row);
+      const digit = Number(button.dataset.digit);
+      response[row] = response[row] === digit ? null : digit;
+      redrawExam(`[data-row="${row}"][data-digit="${digit}"]`);
+    }));
+    const input = main.querySelector('#number-input');
+    if (input) {
+      // Поле не перерисовываем, чтобы не сбивать курсор: обновляем только бланк и кнопку.
+      input.addEventListener('input', () => {
+        exam.responses[exam.index] = input.value;
+        main.querySelector('#blank-value').textContent = input.value.trim() || '—';
+        main.querySelector('#next').innerHTML = examNextLabel();
+        main.querySelectorAll('.strip-cell')[exam.index]?.classList.toggle('is-filled', isComplete(task, input.value));
+      });
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); examNext(); } });
+    }
+  }
+
+  function togglePick(digit) {
+    const task = exam.tasks[exam.index];
+    const response = exam.responses[exam.index];
+    const at = response.indexOf(digit);
+    if (at !== -1) response.splice(at, 1);
+    else if (task.type === 'order' || response.length < task.pick) response.push(digit);
+    else { response.shift(); response.push(digit); }
+    redrawExam(`[data-pick="${digit}"]`);
+  }
+
+  function examNext() {
+    if (!exam || exam.ended) return;
+    if (exam.deadline && remainingSeconds(exam.deadline) === 0) { finishExam(true); return; }
+    const task = exam.tasks[exam.index];
+    const response = exam.responses[exam.index];
+    if (exam.mode === 'trainer' && !exam.checked[exam.index] && isComplete(task, response)) {
+      exam.checked[exam.index] = true;
+      const got = scoreTask(task, response);
+      exam.streak = got === task.points ? exam.streak + 1 : 0;
+      exam.bestStreak = Math.max(exam.bestStreak, exam.streak);
+      showExamTask(0, false);
+      announcer.textContent = got === task.points ? `Верно! ${task.points} из ${task.points}.` : `Баллов: ${got} из ${task.points}. Правильный ответ: ${formatBlank(task, task.answer)}.`;
+      main.querySelector('#next').focus({ preventScroll: true });
+      main.querySelector('#feedback').scrollIntoView({ block: 'nearest', behavior: motionOK() ? 'smooth' : 'auto' });
+      if (motionOK()) main.querySelector('.feedback')?.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' });
+      return;
+    }
+    if (exam.index === exam.tasks.length - 1) askFinishExam();
+    else { exam.index++; showExamTask(1); }
+  }
+
+  document.addEventListener('keydown', event => {
+    if (screen !== 'exam' || !exam || exam.ended || dialog.open || examLocked()) return;
+    if (event.altKey || event.ctrlKey || event.metaKey || document.activeElement?.matches('input')) return;
+    const task = exam.tasks[exam.index];
+    const digit = Number(event.key);
+    const count = task.type === 'multi' ? task.options.length : task.type === 'order' ? task.items.length : 0;
+    if (digit >= 1 && digit <= count) { event.preventDefault(); togglePick(digit); }
+  });
+
+  function updateExamTimer() {
+    if (!exam || exam.ended || !exam.deadline) return;
+    const remaining = remainingSeconds(exam.deadline);
+    if (remaining === 0) { finishExam(true); return; }
+    const timer = main.querySelector('[role="timer"]');
+    if (timer) {
+      main.querySelector('#time-value').textContent = formatTime(remaining);
+      timer.setAttribute('aria-label', `Осталось ${Math.floor(remaining / 60)} мин ${remaining % 60} с`);
+      timer.classList.toggle('urgent', remaining <= 300);
+    }
+    if (remaining <= 300 && !exam.warned) {
+      exam.warned = true;
+      announcer.textContent = 'Осталось меньше пяти минут. По окончании времени вариант завершится автоматически.';
+    }
+  }
+
+  function askFinishExam() {
+    if (exam.deadline && remainingSeconds(exam.deadline) === 0) { finishExam(true); return; }
+    const pending = exam.mode === 'trainer'
+      ? exam.checked.filter(checked => !checked).length
+      : exam.tasks.filter((task, i) => !isComplete(task, exam.responses[i])).length;
+    if (exam.mode === 'trainer' && !pending) { finishExam(); return; }
+    document.querySelector('#dialog-message').textContent = pending
+      ? `${exam.mode === 'trainer' ? 'Не проверено' : 'Без ответа'}: ${pending} из ${exam.tasks.length}. ${exam.mode === 'trainer' ? 'Они не войдут в итог.' : 'За них будет 0 баллов. Можно вернуться и дописать.'}`
+      : 'Все ответы на месте. После завершения изменить их уже не получится.';
+    dialog.showModal();
+    document.querySelector('#continue-test').focus();
+  }
+
+  function finishExam(timedOut = false) {
+    if (!exam || exam.ended) return;
+    exam.ended = true;
+    clearInterval(examTimerId);
+    if (dialog.open) dialog.close();
+    setScreen('result');
+    const { meta } = oge;
+    const variant = exam.mode === 'variant';
+    // В тренажёре в итог идут только проверенные задания.
+    const items = exam.tasks.map((task, i) => ({ task, response: exam.responses[i], got: scoreTask(task, exam.responses[i]) }))
+      .filter((_, i) => variant || exam.checked[i]);
+    const points = items.reduce((sum, item) => sum + item.got, 0);
+    const max = items.reduce((sum, item) => sum + item.task.points, 0);
+    const percent = max ? Math.round(points / max * 100) : 0;
+    if (variant) {
+      // Серию в варианте считаем по порядку заданий уже после проверки.
+      let streak = 0;
+      for (const item of items) { streak = item.got === item.task.points ? streak + 1 : 0; exam.bestStreak = Math.max(exam.bestStreak, streak); }
+    }
+    const grade = variant ? examGrade(points, meta.scale) : gradeFromRatio(max ? points / max : 0);
+    const elapsed = variant && timedOut ? meta.partSeconds : Math.floor((Date.now() - exam.startedAt) / 1000);
+    const title = variant ? 'ОГЭ · вариант, часть 1' : `ОГЭ · задание ${exam.n}`;
+    const summary = { correct: points, total: max, percent, grade, elapsed, bestStreak: exam.bestStreak, timedOut, topic: { grade: 9, title } };
+    const counted = max > 0;
+    const reward = counted ? applyTest(progress, { ...summary, topicId: variant ? EXAM_PROGRESS.variant : EXAM_PROGRESS.trainer(exam.n), schoolClass: 9 }) : null;
+    if (reward) { progress = reward.progress; storage.set(PROGRESS_KEY, progress); renderHeaderStats(); }
+    const mistakes = items.filter(item => item.got < item.task.points);
+    const verdict = VERDICTS[grade];
+    main.innerHTML = `<section class="result" aria-labelledby="result-title">
+      <div class="score-card grade-${grade}" id="score-card">
+        <div class="score-card-top"><span class="chip">${icon('target')} ${escapeHTML(title)}</span></div>
+        <div class="score-ring" role="img" aria-label="${points} ${pointsWord(points)} из ${max}, ${percent}%">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="ring-bg"/><circle cx="60" cy="60" r="52" class="ring-fg" pathLength="100" style="stroke-dasharray:${percent} 100"/></svg>
+          <div class="score-ring-text" aria-hidden="true"><strong>${points}<span>/${max}</span></strong><small>${pointsWord(points)}</small></div>
+        </div>
+        <h1 id="result-title" tabindex="-1" data-focus>${timedOut ? 'Время вышло. ' : ''}${counted ? verdict.title : 'Ни одного проверенного задания'}</h1>
+        <p class="score-card-copy">${!counted ? 'Ответь хотя бы на одно задание и нажми «Проверить».' : variant ? `Только за часть 1 по шкале ${meta.year} года это «${grade}». Часть 2 даёт ещё до ${meta.maxTotal - max} баллов.` : verdict.copy}</p>
+        ${counted ? `<dl class="score-stats">
+          <div><dt>${variant ? 'Оценка' : 'Верно'}</dt><dd>${variant ? grade : `${percent}%`}</dd></div>
+          <div><dt>Время</dt><dd>${formatTime(elapsed)}</dd></div>
+          <div><dt>Лучшая серия</dt><dd>${exam.bestStreak ? `🔥 ${exam.bestStreak}` : '—'}</dd></div>
+        </dl>
+        <div class="reward">
+          <span class="reward-xp">+${reward.gained} XP</span>
+          ${reward.levelUp ? `<span class="reward-tag">${icon('star')} Новый уровень: ${levelFromXP(progress.xp).level}</span>` : ''}
+          ${reward.newRecord ? `<span class="reward-tag">${icon('trophy')} Новый рекорд</span>` : ''}
+        </div>
+        ${reward.newBadges.length ? `<ul class="new-badges" aria-label="Новые бейджи">${reward.newBadges.map(badge => `<li><span aria-hidden="true">${badge.emoji}</span> ${badge.title}</li>`).join('')}</ul>` : ''}` : ''}
+        <p class="score-card-brand">${icon('atom')} ХимТест · химия по шагам</p>
+      </div>
+      ${variant ? `<ol class="points-map" aria-label="Баллы по заданиям">${items.map(({ task, got }) => `<li class="${got === task.points ? 'is-full' : got ? 'is-half' : 'is-zero'}"><span class="pm-num">${task.n}</span><span class="pm-pts">${got}/${task.points}</span></li>`).join('')}</ol>` : ''}
+      <div class="result-actions">
+        <button class="button primary" type="button" data-retry>${icon('retry')} ${variant ? 'Новый вариант' : 'Ещё раз'}</button>
+        ${counted ? `<button class="button secondary" type="button" data-share>${icon('share')} Поделиться</button>` : ''}
+        <button class="button secondary" type="button" data-oge-hub>${icon('grid')} Задания ОГЭ</button>
+      </div>
+      <section class="review" aria-labelledby="review-title">
+        <h2 id="review-title" class="section-title">Разбор ошибок <span class="count-pill">${mistakes.length}</span></h2>
+        ${mistakes.length ? `<p class="review-lead">Нажми на задание, чтобы увидеть, почему так.</p>
+        <div class="review-list">${mistakes.map(({ task, response, got }) => `<details class="review-item">
+          <summary><span class="review-num ${isStarted(task, response) ? '' : 'is-skip'}">${task.n}</span><span class="review-q">${escapeHTML(task.text)}</span>${icon('chevron', 'review-chevron')}</summary>
+          <div class="review-body">
+            <p class="review-line is-wrong">${icon(isStarted(task, response) ? 'cross' : 'clock')}<span><small>Твой ответ · ${got} из ${task.points}</small>${isStarted(task, response) ? formatBlank(task, toBlank(task, response)) : 'Без ответа'}</span></p>
+            <p class="review-line is-right">${icon('check')}<span><small>Правильный ответ</small>${formatBlank(task, task.answer)}</span></p>
+            <p class="review-why">${icon('bulb')}<span><small>Почему так</small>${escapeHTML(task.explanation)}</span></p>
+          </div></details>`).join('')}</div>` : counted ? `<div class="perfect">${icon('trophy')}<p><strong>Ни одной ошибки.</strong> Так держать — бери следующий номер.</p></div>` : ''}
+      </section>
+      ${variant ? `<p class="scale-note">Шкала ${meta.year} года для всего экзамена: «3» — от ${meta.scale[3]}, «4» — от ${meta.scale[4]}, «5» — от ${meta.scale[5]} первичных баллов из ${meta.maxTotal}.</p>` : ''}</section>`;
+    const { mode, n } = exam;
+    main.querySelector('[data-retry]').addEventListener('click', () => startExam(mode, n));
+    main.querySelector('[data-oge-hub]').addEventListener('click', () => showOgeHub());
+    main.querySelector('[data-share]')?.addEventListener('click', event => shareResult(summary, event.currentTarget));
+    announcer.textContent = `${timedOut ? 'Время вышло.' : 'Готово.'} Баллов: ${points} из ${max}.${counted ? ` Получено ${reward.gained} XP.` : ''}`;
+    focusHeading();
+    enter(main);
+    if (counted && grade >= 4) celebrate();
+  }
+
   function showError(message) {
     main.innerHTML = `<div class="error-card" role="alert"><h1 style="font-size:2rem" tabindex="-1" data-focus>Лаборатория пока недоступна</h1><p>${escapeHTML(message)}</p><p>Если вы открыли index.html двойным щелчком, запустите локальный сервер по инструкции в README или откройте публичную ссылку.</p><button class="button primary" id="reload">Попробовать снова</button></div>`;
     main.querySelector('#reload').addEventListener('click', () => location.reload());
@@ -677,11 +1050,14 @@ async function initialize() {
 
   setupTheme();
   document.querySelector('#continue-test').addEventListener('click', () => dialog.close());
-  document.querySelector('#confirm-finish').addEventListener('click', () => finishTest(remainingSeconds(session.deadline) === 0));
-  document.addEventListener('visibilitychange', updateTimer);
-  window.addEventListener('pageshow', updateTimer);
+  document.querySelector('#confirm-finish').addEventListener('click', () => {
+    if (exam && !exam.ended) finishExam();
+    else finishTest(remainingSeconds(session.deadline) === 0);
+  });
+  document.addEventListener('visibilitychange', () => { updateTimer(); updateExamTimer(); });
+  window.addEventListener('pageshow', () => { updateTimer(); updateExamTimer(); });
   window.addEventListener('beforeunload', event => {
-    if (session && !session.ended) { event.preventDefault(); event.returnValue = ''; }
+    if ((session && !session.ended) || (exam && !exam.ended)) { event.preventDefault(); event.returnValue = ''; }
   });
   try {
     renderHeaderStats();
