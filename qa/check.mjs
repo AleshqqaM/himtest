@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { prepareQuestions, validateBank, calculateResult, formatTime, remainingSeconds, shuffle, TEST_SECONDS, levelFromXP, xpForTest, applyTest, emptyProgress, BADGES, OGE_VARIANT_ID } from '../js/app.js';
 import { rankFor, ELEMENTS, elementsUnlocked, localDay, dayDiff, applyDay, currentDayStreak, lastDays, checkNickname, normalizeProfile, exportData, importData, AVATARS, ACTIVITY_DAYS } from '../js/cabinet.js';
 import { validateExamBank, prepareVariant, scoreTask, toBlank, isComplete, emptyResponse, examGrade } from '../js/exam.js';
+import { validateMaterials, renderMarkdown, nextInCourse, encodePlan, parsePlan, resolvePlan } from '../js/kb.js';
 const root = new URL('../', import.meta.url);
 const catalog = JSON.parse(await readFile(new URL('data/topics.json', root)));
 let count = 0;
@@ -169,4 +170,40 @@ for (let run = 0; run < 200; run++, examRuns++) {
 assert.deepEqual([0, 9, 10, 20, 21, 24, 30, 31, 38].map(points => examGrade(points, meta.scale)), [2, 2, 3, 3, 4, 4, 4, 5, 5]);
 assert.throws(() => validateExamBank([{ ...ogeBank[0], answer: '29' }], meta));
 assert.throws(() => validateExamBank(ogeBank.filter(task => task.n !== 7), meta));
-console.log(`OK: ${count} вопросов; ${runs} случайных тестов; правильные ответы после перемешивания; пропуски; границы оценок; короткий банк; расчёт таймера; XP, уровни и бейджи; кабинет: серия дней, коллекция, ник, перенос; ОГЭ: ${ogeBank.length} заданий, ${examRuns} вариантов, частичные баллы.`);
+// База знаний: каталог, Markdown, план ученика.
+const materials = validateMaterials(JSON.parse(await readFile(new URL('content/materials.json', root))), catalog.map(t => t.id));
+const mdFiles = (await readdir(new URL('content/materials/', root))).filter(name => name.endsWith('.md')).sort();
+assert.deepEqual(mdFiles, materials.map(m => `${m.id}.md`).sort(), 'каждый материал в каталоге и каждый .md в content/materials/ — пара');
+for (const m of materials) {
+  const html = renderMarkdown(await readFile(new URL(m.file, root), 'utf8'));
+  assert.ok(html.includes('<h2>') && !/<script|on\w+=/i.test(html), m.id);
+}
+assert.throws(() => validateMaterials([{ ...materials[0], id: 'Bad Id' }], []));
+assert.throws(() => validateMaterials([materials[0], materials[0]], catalog.map(t => t.id)));
+assert.throws(() => validateMaterials([{ ...materials[0], test: 'nope' }], catalog.map(t => t.id)));
+assert.throws(() => validateMaterials([{ ...materials[0], file: './content/materials/other.md' }], catalog.map(t => t.id)));
+assert.equal(renderMarkdown('## H~2~O и Fe^3+^'), '<h2>H<sub>2</sub>O и Fe<sup>3+</sup></h2>');
+assert.equal(renderMarkdown('- a\n- **b**\n\n1. c'), '<ul><li>a</li><li><strong>b</strong></li></ul>\n<ol><li>c</li></ol>');
+assert.equal(renderMarkdown('> Запомни\n> это\nтекст'), '<aside class="kb-note">Запомни это</aside>\n<p>текст</p>');
+assert.equal(renderMarkdown('<img src=x onerror=alert(1)>'), '<p>&lt;img src=x onerror=alert(1)&gt;</p>');
+assert.equal(renderMarkdown('[x](javascript:alert(1))'), '<p>x)</p>');
+assert.equal(renderMarkdown('[x](https://ya.ru")'), '<p>x</p>');
+assert.equal(renderMarkdown('![схема](https://evil.example/a.png)'), '<p>схема</p>');
+assert.equal(renderMarkdown('![схема](./content/images/a.png)'), '<p><img src="./content/images/a.png" alt="схема" loading="lazy"></p>');
+assert.equal(renderMarkdown('[учебник](https://example.org/a)'), '<p><a href="https://example.org/a" target="_blank" rel="noopener">учебник</a></p>');
+assert.equal(nextInCourse(materials, [], 8)?.id, 'g8-oxides');
+assert.equal(nextInCourse(materials, ['g8-oxides'], 8)?.id, 'g8-acids');
+assert.equal(nextInCourse(materials, [], 6), null);
+const hash = encodePlan({ done: ['g8-oxides', 'g8-oxides'], next: 'g8-acids', date: '2026-10-27' });
+assert.equal(hash, '#plan=1&date=2026-10-27&done=g8-oxides&next=g8-acids');
+assert.deepEqual(parsePlan(hash), { done: ['g8-oxides'], next: 'g8-acids', date: '2026-10-27' });
+assert.equal(parsePlan(''), null);
+assert.equal(parsePlan('#top'), null);
+assert.deepEqual(parsePlan('#plan=1'), { done: [], next: null, date: null });
+assert.deepEqual(parsePlan('#plan=1&done=a&next=a'), { done: ['a'], next: null, date: null });
+for (const broken of ['#plan=2', '#plan=1&done=A', '#plan=1&next=<x>', '#plan=1&date=27.10', `#plan=1&done=${Array.from({ length: 201 }, (_, i) => `t${i}`).join(',')}`]) {
+  assert.throws(() => parsePlan(broken), broken);
+}
+assert.deepEqual(resolvePlan(parsePlan('#plan=1&done=g8-oxides,gone&next=g8-acids'), materials),
+  { date: null, done: [materials[0]], next: materials[1], unknown: ['gone'] });
+console.log(`OK: ${count} вопросов; ${runs} случайных тестов; правильные ответы после перемешивания; пропуски; границы оценок; короткий банк; расчёт таймера; XP, уровни и бейджи; кабинет: серия дней, коллекция, ник, перенос; ОГЭ: ${ogeBank.length} заданий, ${examRuns} вариантов, частичные баллы; база знаний: ${materials.length} материала, Markdown без HTML, план-ссылка.`);

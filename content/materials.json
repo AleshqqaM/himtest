@@ -1,0 +1,20 @@
+[
+  {
+    "id": "g8-oxides",
+    "grade": 8,
+    "title": "Оксиды",
+    "summary": "Что такое оксиды, как их назвать и чем основные оксиды отличаются от кислотных.",
+    "file": "./content/materials/g8-oxides.md",
+    "test": "grade-8-compounds",
+    "minutes": 10
+  },
+  {
+    "id": "g8-acids",
+    "grade": 8,
+    "title": "Кислоты",
+    "summary": "Состав кислот, кислотные остатки и первые реакции кислот с металлами.",
+    "file": "./content/materials/g8-acids.md",
+    "test": "grade-8-compounds",
+    "minutes": 10
+  }
+]
