@@ -114,6 +114,10 @@ export function importData(data, base, badgeIds) {
     if (!Array.isArray(raw.grades) || !raw.grades.every(grade => Number.isInteger(grade) && grade >= 6 && grade <= 11)) fail();
     progress.grades = [...new Set(raw.grades)].sort((a, b) => a - b);
   }
+  if (raw.read !== undefined) {
+    if (!Array.isArray(raw.read) || raw.read.length > 500 || !raw.read.every(id => typeof id === 'string' && /^[a-z0-9-]{1,60}$/.test(id))) fail();
+    progress.read = [...new Set(raw.read)];
+  }
   if (raw.lastDay !== undefined && raw.lastDay !== null) {
     if (typeof raw.lastDay !== 'string' || !DAY_RE.test(raw.lastDay)) fail();
     progress.lastDay = raw.lastDay;

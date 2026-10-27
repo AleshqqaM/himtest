@@ -1,4 +1,5 @@
 import { rankFor, ELEMENTS, XP_PER_ELEMENT, elementsUnlocked, localDay, applyDay, currentDayStreak, lastDays, AVATARS, NICK_MAX, emptyProfile, checkNickname, normalizeProfile, exportData, importData } from './cabinet.js';
+import { validateMaterials, renderMarkdown, nextInCourse, parsePlan, normalizePlan, resolvePlan, applyRead, READ_XP } from './kb.js';
 import { MATCH_LETTERS, emptyResponse, isComplete, isStarted, toBlank, formatBlank, scoreTask, examGrade, prepareVariant, validateExamBank } from './exam.js';
 
 // Чистые функции: их можно проверить отдельно от интерфейса.
@@ -78,7 +79,7 @@ export const BADGES = [
 export const OGE_VARIANT_ID = 'oge-variant';
 
 export const emptyProgress = () => ({ xp: 0, tests: 0, bestStreak: 0, best: {}, badges: [], grades: [],
-  dayStreak: 0, bestDayStreak: 0, lastDay: null, activity: {} });
+  dayStreak: 0, bestDayStreak: 0, lastDay: null, activity: {}, read: [] });
 
 export function xpForTest({ correct, total, grade }, bestStreak) {
   return correct * 10 + 10 + (bestStreak >= 5 ? 20 : 0) + (grade === 5 ? 30 : 0) + (total && correct === total ? 50 : 0);
@@ -105,6 +106,7 @@ export function applyTest(previous, summary, day = localDay()) {
     best: { ...progress.best, [summary.topicId]: Math.max(record ?? 0, summary.percent) },
     grades: [...new Set([...progress.grades, summary.schoolClass])].sort((a, b) => a - b),
     badges: [...progress.badges],
+    read: [...progress.read],
     ...applyDay(progress, day, gained),
   };
   const variant = summary.topicId === OGE_VARIANT_ID;
@@ -200,6 +202,7 @@ const ICONS = {
   upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  book: '<path d="M4 19.5V5a2 2 0 0 1 2-2h14v15H6a2 2 0 0 0-2 2 2 2 0 0 0 2 2h14"/><path d="M8 7h8M8 11h5"/>',
 };
 
 // Склонение после числа: plural(3, ['день', 'дня', 'дней']) → «дня».
@@ -366,8 +369,13 @@ async function initialize() {
   let examTimerId = null;
   const PROGRESS_KEY = 'himtest-progress';
   const PROFILE_KEY = 'himtest-profile';
+  const PLAN_KEY = 'himtest-plan';
   let progress = { ...emptyProgress(), ...storage.get(PROGRESS_KEY, {}) };
   let profile = normalizeProfile(storage.get(PROFILE_KEY, {}));
+  let plan = null;
+  try { plan = storage.get(PLAN_KEY) && normalizePlan(storage.get(PLAN_KEY)); } catch { /* испорченный план просто не показываем */ }
+  let materials = null;
+  let kbGrade = null;
 
   function renderHeaderStats() {
     const { level } = levelFromXP(progress.xp);
@@ -427,6 +435,7 @@ async function initialize() {
         ${HERO_ART}
       </section>
       ${progressPanelHTML()}
+      ${kbCardHTML()}
       <section class="oge-card" aria-labelledby="oge-title">
         <div class="oge-card-text">
           <p class="chip chip-violet">${icon('target')} 9 класс · задания 1–19</p>
@@ -462,8 +471,218 @@ async function initialize() {
     main.querySelector('[data-oge-hub]').addEventListener('click', () => showOgeHub());
     main.querySelector('[data-oge-variant]').addEventListener('click', () => startExam('variant'));
     main.querySelector('.cabinet-teaser [data-cabinet]')?.addEventListener('click', () => showCabinet());
+    bindKbLinks();
     if (moveFocus) focusHeading();
     if (animate) enter(main);
+  }
+
+  // База знаний: конспекты учителя из content/ и план, пришедший ссылкой.
+  const NOTES = ['конспект', 'конспекта', 'конспектов'];
+  const formatDay = day => day.split('-').reverse().slice(0, 2).join('.');
+
+  async function loadMaterials() {
+    materials ??= validateMaterials(await loadJSON('./content/materials.json'), catalog.map(topic => topic.id));
+    return materials;
+  }
+
+  function bindKbLinks() {
+    main.querySelectorAll('[data-kb]').forEach(button => button.addEventListener('click', () => showKnowledge()));
+    main.querySelectorAll('[data-material]').forEach(button => button.addEventListener('click', () => showMaterial(button.dataset.material)));
+  }
+
+  function materialStatus(m) {
+    if (plan?.next === m.id) return { cls: 'is-next', icon: 'star', text: 'Следующая' };
+    if (plan?.done.includes(m.id)) return { cls: 'is-done', icon: 'check', text: 'Пройдено с учителем' };
+    if (progress.read.includes(m.id)) return { cls: 'is-read', icon: 'check', text: 'Прочитано' };
+    return null;
+  }
+
+  function kbCardHTML() {
+    if (!materials?.length) return '';
+    const next = plan?.next ? materials.find(m => m.id === plan.next) : null;
+    return `<section class="oge-card kb-card" aria-labelledby="kb-card-title">
+        <div class="oge-card-text">
+          <p class="chip chip-accent">${icon('book')} ${materials.length} ${plural(materials.length, NOTES)}</p>
+          <h2 id="kb-card-title">База знаний</h2>
+          <p>${next ? `Следующая тема от учителя: <strong>${escapeHTML(next.title)}</strong>.` : 'Короткие конспекты по темам: прочитай, отметь и проверь себя тестом.'}</p>
+        </div>
+        <div class="oge-actions">
+          ${next ? `<button class="button primary" type="button" data-material="${next.id}">${icon('star')} Читать тему</button>` : ''}
+          <button class="button ${next ? 'secondary' : 'primary'}" type="button" data-kb>${icon('book')} Открыть базу</button>
+        </div>
+      </section>`;
+  }
+
+  function materialCardHTML(m) {
+    const status = materialStatus(m);
+    return `<article class="kb-item${status ? ` ${status.cls}` : ''}">
+        <div class="kb-item-text">
+          <h3>${escapeHTML(m.title)}</h3>
+          <p>${escapeHTML(m.summary)}</p>
+          <p class="kb-meta">${m.minutes ? `<span>${icon('clock')} ${m.minutes} мин</span>` : ''}${status ? `<span class="kb-status">${icon(status.icon)} ${status.text}</span>` : ''}</p>
+        </div>
+        <button class="button secondary" type="button" data-material="${m.id}" aria-label="Читать: ${escapeHTML(m.title)}">Читать ${icon('arrowRight')}</button>
+      </article>`;
+  }
+
+  async function showKnowledge(moveFocus = true, animate = true) {
+    if (busy()) return;
+    try { await loadMaterials(); } catch (error) {
+      console.error(error);
+      setScreen('error');
+      showError('Не удалось загрузить базу знаний. Проверьте подключение и попробуйте ещё раз.');
+      return;
+    }
+    setScreen('kb');
+    const next = plan?.next ? materials.find(m => m.id === plan.next) : null;
+    kbGrade ??= next?.grade ?? selectedGrade;
+    const list = materials.filter(m => m.grade === kbGrade);
+    const counts = Object.fromEntries([6, 7, 8, 9, 10, 11].map(grade => [grade, materials.filter(m => m.grade === grade).length]));
+    main.innerHTML = `<section class="kb" aria-labelledby="kb-title">
+      <button class="text-button back-link" type="button" data-home>${icon('arrowLeft')} Все темы</button>
+      <h1 id="kb-title" tabindex="-1" data-focus>База знаний</h1>
+      <p class="hero-copy">Короткие конспекты от учителя. Прочитай, отметь «Прочитано» и закрепи тестом.</p>
+      ${next ? `<p class="kb-next-note">${icon('star')} Следующая тема по плану: <button class="text-button inline-link" type="button" data-material="${next.id}">${escapeHTML(next.title)}</button></p>` : ''}
+      <div class="grade-tabs" role="group" aria-label="Выбери класс">${[6, 7, 8, 9, 10, 11].map(grade => `<button class="grade-tab" type="button" data-kb-grade="${grade}" aria-pressed="${grade === kbGrade}" aria-label="${grade} класс, конспектов: ${counts[grade]}">${grade}<small>класс</small>${counts[grade] ? '<span class="tab-dot" aria-hidden="true"></span>' : ''}</button>`).join('')}</div>
+      <div class="kb-list">${list.map(materialCardHTML).join('') || `<div class="empty-state"><h3>Для ${kbGrade} класса конспектов пока нет</h3><p>Учитель добавит их позже. Загляни в другие классы.</p></div>`}</div>
+    </section>`;
+    main.querySelector('[data-home]').addEventListener('click', () => showHome(true));
+    main.querySelectorAll('[data-kb-grade]').forEach(button => button.addEventListener('click', () => {
+      kbGrade = Number(button.dataset.kbGrade);
+      showKnowledge(false, false);
+      main.querySelector(`[data-kb-grade="${kbGrade}"]`).focus({ preventScroll: true });
+      announcer.textContent = `${kbGrade} класс. Конспектов: ${counts[kbGrade]}.`;
+    }));
+    bindKbLinks();
+    if (moveFocus) focusHeading();
+    if (animate) enter(main);
+  }
+
+  async function showMaterial(id) {
+    if (busy()) return;
+    let m, html;
+    try {
+      m = (await loadMaterials()).find(item => item.id === id);
+      if (!m) { showKnowledge(); return; }
+      const response = await fetch(m.file);
+      if (!response.ok) throw new Error(`Не удалось загрузить ${m.file}`);
+      html = renderMarkdown(await response.text());
+    } catch (error) {
+      console.error(error);
+      setScreen('error');
+      showError('Не удалось открыть конспект. Проверьте подключение и попробуйте ещё раз.');
+      return;
+    }
+    setScreen('material');
+    kbGrade = m.grade;
+    const read = progress.read.includes(m.id);
+    const status = materialStatus(m);
+    const test = m.test ? catalog.find(topic => topic.id === m.test && topic.file) : null;
+    const course = materials.filter(item => item.grade === m.grade);
+    const after = course[course.indexOf(m) + 1];
+    main.innerHTML = `<article class="material" aria-labelledby="material-title">
+      <button class="text-button back-link" type="button" data-kb>${icon('arrowLeft')} База знаний</button>
+      <p class="chip chip-accent">${icon('book')} ${m.grade} класс${m.minutes ? ` · ${m.minutes} мин` : ''}${status ? ` · ${status.text}` : ''}</p>
+      <h1 id="material-title" tabindex="-1" data-focus>${escapeHTML(m.title)}</h1>
+      <div class="kb-body">${html}</div>
+      <section class="cabinet-block material-actions" aria-label="Что дальше">
+        <button class="button ${read ? 'secondary' : 'primary'}" type="button" data-read ${read ? 'disabled' : ''}>${icon('check')} ${read ? 'Прочитано' : `Прочитано · +${READ_XP} XP`}</button>
+        ${test ? `<button class="button secondary" type="button" data-start="${escapeHTML(test.id)}">${icon('target')} Проверь себя: тест</button>` : ''}
+        ${after ? `<button class="button secondary" type="button" data-material="${after.id}">Дальше: ${escapeHTML(after.title)} ${icon('arrowRight')}</button>` : ''}
+      </section>
+    </article>`;
+    bindKbLinks();
+    main.querySelector('[data-start]')?.addEventListener('click', event => startTest(event.currentTarget.dataset.start));
+    main.querySelector('[data-read]').addEventListener('click', event => {
+      const result = applyRead(progress, m.id, localDay());
+      if (!result.gained) return;
+      progress = result.progress;
+      storage.set(PROGRESS_KEY, progress);
+      renderHeaderStats();
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.classList.replace('primary', 'secondary');
+      button.innerHTML = `${icon('check')} Прочитано`;
+      announcer.textContent = `Отмечено как прочитанное. Плюс ${READ_XP} опыта.`;
+    });
+    focusHeading();
+    enter(main);
+  }
+
+  // План от учителя приходит в адресе после #: его видит только браузер, на сервер он не уходит.
+  const clearHash = () => history.replaceState(null, '', location.pathname + location.search);
+
+  function planBodyHTML(resolved, links) {
+    const title = m => links
+      ? `<button class="text-button" type="button" data-material="${m.id}">${escapeHTML(m.title)}</button>`
+      : `<span>${escapeHTML(m.title)}</span>`;
+    return `${resolved.next ? `<div class="plan-next">
+          <span class="plan-next-label">${icon('star')} Следующая тема</span>
+          <strong>${escapeHTML(resolved.next.title)}</strong>
+          <small>${resolved.next.grade} класс${resolved.next.minutes ? ` · ${resolved.next.minutes} мин` : ''}</small>
+          ${links ? `<button class="button primary" type="button" data-material="${resolved.next.id}">Читать ${icon('arrowRight')}</button>` : ''}
+        </div>` : ''}
+      ${resolved.done.length ? `<h3 class="plan-sub">Пройдено с учителем · ${resolved.done.length}</h3>
+        <ul class="plan-done">${resolved.done.map(m => `<li>${icon('check')} ${title(m)}<small>${m.grade} кл.</small></li>`).join('')}</ul>` : ''}
+      ${resolved.unknown.length ? `<p class="block-note">Тем из ссылки пока нет на сайте: ${resolved.unknown.length}. Возможно, учитель их ещё не выложил.</p>` : ''}`;
+  }
+
+  function checkPlanHash() {
+    let incoming;
+    try { incoming = parsePlan(location.hash); } catch (error) { showPlanProblem(error.message); return true; }
+    if (!incoming) return false;
+    showPlanOffer(incoming);
+    return true;
+  }
+
+  function showPlanOffer(incoming) {
+    setScreen('plan');
+    const resolved = resolvePlan(incoming, materials ?? []);
+    const replacing = plan && JSON.stringify(plan) !== JSON.stringify(incoming);
+    main.innerHTML = `<section class="plan-offer" aria-labelledby="plan-title">
+      <p class="chip chip-violet">${icon('clipboard')} План от учителя${incoming.date ? ` · ${formatDay(incoming.date)}` : ''}</p>
+      <h1 id="plan-title" tabindex="-1" data-focus>Сохранить план в кабинет?</h1>
+      <p class="hero-copy">План сохранится только на этом устройстве. В ссылке нет имени — только темы и дата.</p>
+      <div class="cabinet-block">${planBodyHTML(resolved, false) || '<p>В этом плане пока нет тем.</p>'}</div>
+      ${replacing ? '<p class="block-note">Новый план заменит тот, что уже сохранён.</p>' : ''}
+      <div class="form-actions"><button class="button primary" type="button" data-plan-save>${icon('check')} Сохранить</button><button class="button secondary" type="button" data-plan-skip>Не сейчас</button></div>
+    </section>`;
+    main.querySelector('[data-plan-save]').addEventListener('click', async () => {
+      plan = incoming;
+      storage.set(PLAN_KEY, plan);
+      kbGrade = null;
+      clearHash();
+      await showCabinet();
+      announcer.textContent = 'План сохранён в кабинете.';
+    });
+    main.querySelector('[data-plan-skip]').addEventListener('click', () => { clearHash(); showHome(true); });
+    focusHeading();
+    enter(main);
+  }
+
+  function showPlanProblem(message) {
+    setScreen('plan');
+    main.innerHTML = `<div class="error-card" role="alert"><h1 style="font-size:2rem" tabindex="-1" data-focus>Ссылка на план не открылась</h1><p>${escapeHTML(message)}</p><button class="button primary" type="button" data-home>На главную</button></div>`;
+    main.querySelector('[data-home]').addEventListener('click', () => { clearHash(); showHome(true); });
+    focusHeading();
+  }
+
+  function cabinetPlanHTML() {
+    if (!materials) return '';
+    if (!plan) return `<section class="cabinet-block plan-block" aria-labelledby="plan-block-title">
+        <div class="block-head"><h2 id="plan-block-title">${icon('clipboard')} Мой план</h2></div>
+        <p>Учитель может прислать ссылку с твоим планом: какие темы пройдены и что изучать дальше. Открой её на этом устройстве — план появится здесь.</p>
+        <button class="button secondary" type="button" data-kb>${icon('book')} База знаний</button>
+      </section>`;
+    const resolved = resolvePlan(plan, materials);
+    const last = resolved.done.at(-1);
+    const suggestion = !resolved.next && last ? nextInCourse(materials, [...plan.done, ...progress.read], last.grade) : null;
+    return `<section class="cabinet-block plan-block" aria-labelledby="plan-block-title">
+        <div class="block-head"><h2 id="plan-block-title">${icon('clipboard')} Мой план</h2>${plan.date ? `<span class="goal">от ${formatDay(plan.date)}</span>` : ''}</div>
+        ${planBodyHTML(resolved, true)}
+        ${suggestion ? `<p class="block-note">Учитель пока не задал следующую тему. По порядку курса дальше — <button class="text-button inline-link" type="button" data-material="${suggestion.id}">${escapeHTML(suggestion.title)}</button>.</p>` : ''}
+        <p class="block-note">Новый план приходит новой ссылкой от учителя. <button class="text-button inline-link" type="button" data-plan-clear>Убрать план</button></p>
+      </section>`;
   }
 
   async function startTest(topicId) {
@@ -1105,6 +1324,7 @@ async function initialize() {
     if (busy()) return;
     let meta = null;
     try { meta = (await loadOge()).meta; } catch (error) { console.error(error); }
+    try { await loadMaterials(); } catch (error) { console.error(error); }
     setScreen('cabinet');
     const today = localDay();
     const lvl = levelFromXP(progress.xp);
@@ -1140,6 +1360,7 @@ async function initialize() {
         <div><dt>Серия ответов</dt><dd>⚡ ${progress.bestStreak}</dd></div>
         <div><dt>Бейджи</dt><dd>🏅 ${progress.badges.length}/${BADGES.length}</dd></div>
       </dl>
+      ${cabinetPlanHTML()}
       <section class="cabinet-block" aria-labelledby="goal-title">
         <div class="block-head"><h2 id="goal-title">Цель дня</h2><span class="goal ${doneToday ? 'is-done' : ''}">${doneToday ? `${icon('check')} Выполнена` : 'Один тест или вариант'}</span></div>
         <ol class="week" aria-label="Опыт за последние 7 дней">${week.map(day => `<li class="${day.today ? 'is-today' : ''}${day.xp ? ' is-active' : ''}">
@@ -1203,6 +1424,14 @@ async function initialize() {
     main.querySelector('[data-home]').addEventListener('click', () => showHome(true));
     main.querySelector('[data-oge-hub]')?.addEventListener('click', () => showOgeHub());
     main.querySelector('[data-privacy]').addEventListener('click', () => showPrivacy());
+    bindKbLinks();
+    main.querySelector('[data-plan-clear]')?.addEventListener('click', () => {
+      if (!confirm('Убрать план от учителя с этого устройства? Его можно вернуть, открыв ссылку ещё раз.')) return;
+      plan = null;
+      storage.remove(PLAN_KEY);
+      showCabinet();
+      announcer.textContent = 'План убран.';
+    });
     toggle.addEventListener('click', () => openForm(form.hidden));
     form.querySelector('[data-cancel-profile]').addEventListener('click', () => openForm(false));
     nick.addEventListener('input', () => { nick.removeAttribute('aria-invalid'); hint.textContent = hintText; hint.classList.remove('is-error'); });
@@ -1250,11 +1479,13 @@ async function initialize() {
       }
     });
     main.querySelector('[data-wipe]').addEventListener('click', () => {
-      if (!confirm('Удалить уровень, XP, бейджи, рекорды, ник и аватар с этого устройства? Отменить нельзя. Если нужно, сначала сохрани прогресс в файл.')) return;
+      if (!confirm('Удалить уровень, XP, бейджи, рекорды, отметки о прочитанном, план, ник и аватар с этого устройства? Отменить нельзя. Если нужно, сначала сохрани прогресс в файл.')) return;
       progress = emptyProgress();
       profile = emptyProfile();
+      plan = null;
       storage.remove(PROGRESS_KEY);
       storage.remove(PROFILE_KEY);
+      storage.remove(PLAN_KEY);
       renderHeaderStats();
       showHome(true);
       announcer.textContent = 'Все данные удалены с этого устройства.';
@@ -1273,11 +1504,13 @@ async function initialize() {
         <article class="cabinet-block"><h2>${icon('shield')} Что мы не собираем</h2>
           <p>Нет регистрации и входа. Мы не спрашиваем имя, фамилию, возраст, школу, телефон, почту и фото. На сайте нет рекламы, счётчиков посещений и аналитики, мы не ставим cookie.</p></article>
         <article class="cabinet-block"><h2>${icon('grid')} Что хранится на устройстве</h2>
-          <p>Уровень, XP, бейджи, рекорды, серия дней, ник, аватар и выбранная тема оформления. Всё лежит в памяти браузера (localStorage) на этом устройстве и не отправляется на сервер — у сайта его просто нет.</p></article>
+          <p>Уровень, XP, бейджи, рекорды, серия дней, отметки о прочитанных конспектах, план от учителя, ник, аватар и выбранная тема оформления. Всё лежит в памяти браузера (localStorage) на этом устройстве и не отправляется на сервер — у сайта его просто нет.</p></article>
         <article class="cabinet-block"><h2>${icon('edit')} Ник</h2>
           <p>Ник необязателен и виден только тебе. Придумай его сам: не используй настоящие имя и фамилию, телефон или почту — сайт такие ники не примет.</p></article>
         <article class="cabinet-block"><h2>${icon('download')} Перенос и удаление</h2>
           <p>В кабинете можно сохранить прогресс в файл и загрузить его на другом устройстве. Файл остаётся у тебя. Кнопка «Удалить всё» стирает данные сайта из этого браузера; то же делает очистка данных сайта в настройках браузера.</p></article>
+        <article class="cabinet-block"><h2>${icon('clipboard')} План от учителя</h2>
+          <p>Учитель присылает ссылку, в которой записаны только темы и дата — без имени. Часть ссылки после знака # браузер не отправляет на сервер. План сохраняется в этом браузере, пока ты его не уберёшь.</p></article>
         <article class="cabinet-block"><h2>${icon('atom')} Хостинг</h2>
           <p>Сайт размещён на GitHub Pages, шрифты и всё остальное загружаются оттуда же — сторонних сервисов нет. Как любой сервер, GitHub технически видит IP-адрес и тип браузера, когда открывается страница. Это его журналы по его правилам, у нас к ним доступа нет.</p></article>
       </div>
@@ -1310,7 +1543,9 @@ async function initialize() {
   try {
     renderHeaderStats();
     catalog = await loadJSON('./data/topics.json');
-    showHome();
+    try { await loadMaterials(); } catch (error) { console.error(error); }
+    if (!checkPlanHash()) showHome();
+    window.addEventListener('hashchange', () => { if (!busy()) checkPlanHash(); });
   } catch (error) {
     console.error(error);
     showError('Не удалось загрузить список тем. Проверьте подключение и обновите страницу.');

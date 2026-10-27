@@ -3,7 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { prepareQuestions, validateBank, calculateResult, formatTime, remainingSeconds, shuffle, TEST_SECONDS, levelFromXP, xpForTest, applyTest, emptyProgress, BADGES, OGE_VARIANT_ID } from '../js/app.js';
 import { rankFor, ELEMENTS, elementsUnlocked, localDay, dayDiff, applyDay, currentDayStreak, lastDays, checkNickname, normalizeProfile, exportData, importData, AVATARS, ACTIVITY_DAYS } from '../js/cabinet.js';
 import { validateExamBank, prepareVariant, scoreTask, toBlank, isComplete, emptyResponse, examGrade } from '../js/exam.js';
-import { validateMaterials, renderMarkdown, nextInCourse, encodePlan, parsePlan, resolvePlan } from '../js/kb.js';
+import { validateMaterials, renderMarkdown, nextInCourse, encodePlan, parsePlan, resolvePlan, applyRead, READ_XP } from '../js/kb.js';
 const root = new URL('../', import.meta.url);
 const catalog = JSON.parse(await readFile(new URL('data/topics.json', root)));
 let count = 0;
@@ -206,4 +206,14 @@ for (const broken of ['#plan=2', '#plan=1&done=A', '#plan=1&next=<x>', '#plan=1&
 }
 assert.deepEqual(resolvePlan(parsePlan('#plan=1&done=g8-oxides,gone&next=g8-acids'), materials),
   { date: null, done: [materials[0]], next: materials[1], unknown: ['gone'] });
+// «Прочитано»: опыт один раз, серия дней, отметки переживают тест и перенос файлом.
+let reading = applyRead(emptyProgress(), 'g8-oxides', '2026-10-27');
+assert.equal(reading.gained, READ_XP);
+assert.deepEqual([reading.progress.xp, reading.progress.read, reading.progress.dayStreak, reading.progress.lastDay], [READ_XP, ['g8-oxides'], 1, '2026-10-27']);
+assert.equal(applyRead(reading.progress, 'g8-oxides', '2026-10-27').gained, 0);
+reading = applyTest(reading.progress, base, '2026-10-28');
+assert.deepEqual(reading.progress.read, ['g8-oxides']);
+const movedRead = importData(JSON.parse(JSON.stringify(exportData(reading.progress, { nick: '', avatar: AVATARS[0] }, '2026-10-28'))), emptyProgress(), BADGES.map(b => b.id));
+assert.deepEqual(movedRead.progress.read, ['g8-oxides']);
+assert.throws(() => importData({ ...exportData(reading.progress, { nick: '', avatar: AVATARS[0] }, '2026-10-28'), progress: { read: ['<x>'] } }, emptyProgress(), []));
 console.log(`OK: ${count} вопросов; ${runs} случайных тестов; правильные ответы после перемешивания; пропуски; границы оценок; короткий банк; расчёт таймера; XP, уровни и бейджи; кабинет: серия дней, коллекция, ник, перенос; ОГЭ: ${ogeBank.length} заданий, ${examRuns} вариантов, частичные баллы; база знаний: ${materials.length} материала, Markdown без HTML, план-ссылка.`);

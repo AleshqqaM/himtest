@@ -1,6 +1,8 @@
 // База знаний и план ученика: чистые функции. Материалы лежат в content/, план приходит ссылкой
 // от учителя и хранится только на устройстве ученика. Интерфейс — в app.js.
 
+import { applyDay } from './cabinet.js';
+
 export const MATERIAL_ID_RE = /^[a-z0-9-]{1,60}$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const GRADES = [6, 7, 8, 9, 10, 11];
@@ -22,6 +24,14 @@ export function validateMaterials(list, testIds = []) {
     ids.add(m.id);
   });
   return list;
+}
+
+// «Прочитано»: отметка ставится один раз и даёт немного опыта, серия дней тоже засчитывается.
+export const READ_XP = 10;
+
+export function applyRead(progress, id, day) {
+  if (progress.read.includes(id)) return { progress, gained: 0 };
+  return { gained: READ_XP, progress: { ...progress, xp: progress.xp + READ_XP, read: [...progress.read, id], ...applyDay(progress, day, READ_XP) } };
 }
 
 // Следующая тема по порядку курса, если учитель не задал свою.

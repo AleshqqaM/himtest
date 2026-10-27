@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f7f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#07120e" media="(prefers-color-scheme: dark)">
+  <meta name="robots" content="noindex">
+  <title>План для ученика — ХимТест</title>
+  <script>
+    try { var t = localStorage.getItem('himtest-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%230d7a52'/%3E%3Cg fill='none' stroke='white' stroke-width='3.5'%3E%3Cellipse cx='32' cy='32' rx='22' ry='9'/%3E%3Cellipse cx='32' cy='32' rx='22' ry='9' transform='rotate(60 32 32)'/%3E%3Cellipse cx='32' cy='32' rx='22' ry='9' transform='rotate(120 32 32)'/%3E%3C/g%3E%3Ccircle cx='32' cy='32' r='5' fill='%23c8f169'/%3E%3C/svg%3E">
+  <link rel="preload" href="./fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./fonts/unbounded-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./css/fonts.css">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body data-screen="teacher">
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <header class="site-header wrap">
+    <a class="brand" href="./index.html" aria-label="ХимТест — на главную">
+      <span class="brand-mark" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(120 12 12)"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg></span>
+      <span>ХимТест<small>для учителя</small></span>
+    </a>
+  </header>
+  <main id="main" class="wrap teacher" tabindex="-1">
+    <h1 id="teacher-title">План для ученика</h1>
+    <p class="hero-copy">Отметьте пройденные темы и следующую — получится ссылка. Ученик открывает её, и план появляется у него в кабинете. Имени в ссылке нет, на сайте ничего не сохраняется.</p>
+    <section class="cabinet-block" aria-labelledby="load-title">
+      <h2 id="load-title">Изменить прежний план</h2>
+      <p>Вставьте ссылку, которую уже отправляли ученику, — отметки подставятся, останется добавить новое.</p>
+      <form class="teacher-load" id="load-form" novalidate>
+        <label class="sr-only" for="old-link">Прежняя ссылка</label>
+        <input class="text-input" id="old-link" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/himtest/#plan=1&amp;…">
+        <button class="button secondary" type="submit">Подставить</button>
+      </form>
+      <p class="data-status" id="load-status" role="status"></p>
+    </section>
+    <form id="plan-form" novalidate>
+      <div id="materials"><p class="loading" role="status">Загружаем темы…</p></div>
+      <section class="cabinet-block" aria-labelledby="date-title">
+        <h2 id="date-title">Дата плана</h2>
+        <label class="field-label" for="plan-date">Ученик увидит «план от …»</label>
+        <input class="text-input teacher-date" id="plan-date" type="date">
+      </section>
+    </form>
+    <section class="cabinet-block teacher-result" aria-labelledby="result-title">
+      <div class="block-head"><h2 id="result-title">Ссылка для ученика</h2><span class="goal" id="summary"></span></div>
+      <label class="sr-only" for="plan-link">Ссылка</label>
+      <textarea class="text-input plan-link" id="plan-link" rows="3" readonly></textarea>
+      <div class="data-actions">
+        <button class="button primary" type="button" id="copy">Скопировать</button>
+        <button class="button secondary" type="button" id="share" hidden>Поделиться</button>
+        <a class="button secondary" id="preview" href="./index.html" target="_blank" rel="noopener">Открыть как ученик</a>
+      </div>
+      <p class="data-status" id="result-status" role="status"></p>
+      <p class="block-note">Чтобы не путать учеников, храните ссылки у себя — например, в заметках телефона. На сайт имена вводить не нужно.</p>
+    </section>
+  </main>
+  <footer class="site-footer wrap"><span>ХимТест · страница для учителя</span><a class="inline-link" href="./index.html">На сайт для учеников</a></footer>
+  <noscript><p class="wrap">Для генератора нужно включить JavaScript в браузере.</p></noscript>
+  <script type="module" src="./js/teacher.js"></script>
+</body>
+</html>
