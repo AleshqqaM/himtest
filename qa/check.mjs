@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { prepareQuestions, validateBank, calculateResult, formatTime, remainingSeconds, shuffle, TEST_SECONDS, levelFromXP, xpForTest, applyTest, emptyProgress, BADGES } from '../js/app.js';
+import { prepareQuestions, validateBank, calculateResult, formatTime, remainingSeconds, shuffle, TEST_SECONDS, levelFromXP, xpForTest, applyTest, emptyProgress, BADGES, OGE_VARIANT_ID } from '../js/app.js';
+import { rankFor, ELEMENTS, elementsUnlocked, localDay, dayDiff, applyDay, currentDayStreak, lastDays, checkNickname, normalizeProfile, exportData, importData, AVATARS, ACTIVITY_DAYS } from '../js/cabinet.js';
 import { validateExamBank, prepareVariant, scoreTask, toBlank, isComplete, emptyResponse, examGrade } from '../js/exam.js';
 const root = new URL('../', import.meta.url);
 const catalog = JSON.parse(await readFile(new URL('data/topics.json', root)));
@@ -82,7 +83,59 @@ assert.equal(step.newBadges.length, 0);
 for (const [topicId, schoolClass] of [['t2', 7], ['t3', 8], ['t4', 9], ['t5', 10], ['t6', 11]]) step = applyTest(step.progress, { ...base, topicId, schoolClass });
 assert.ok(step.progress.badges.includes('explorer') && step.progress.badges.includes('allGrades'));
 assert.equal(new Set(step.progress.badges).size, step.progress.badges.length);
-assert.equal(BADGES.length, 7);
+assert.equal(BADGES.length, 13);
+assert.equal(new Set(BADGES.map(b => b.id)).size, BADGES.length);
+// Личный кабинет: серия дней, коллекция, звания, ник, перенос.
+assert.equal(localDay(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
+assert.equal(dayDiff('2026-02-28', '2026-03-01'), 1);
+assert.equal(dayDiff('2026-12-31', '2027-01-01'), 1);
+let days = applyTest(emptyProgress(), base, '2026-10-01');
+assert.equal(days.progress.dayStreak, 1);
+assert.equal(days.dayStreakUp, false);
+days = applyTest(days.progress, base, '2026-10-01');
+assert.equal(days.progress.dayStreak, 1);
+assert.equal(days.progress.activity['2026-10-01'], 2 * xpForTest(base, base.bestStreak));
+days = applyTest(days.progress, base, '2026-10-02');
+assert.equal(days.dayStreakUp, true);
+days = applyTest(days.progress, base, '2026-10-03');
+assert.equal(days.progress.dayStreak, 3);
+assert.ok(days.newBadges.some(b => b.id === 'days3'));
+assert.equal(currentDayStreak(days.progress, '2026-10-04'), 3);
+assert.equal(currentDayStreak(days.progress, '2026-10-05'), 0);
+days = applyTest(days.progress, base, '2026-10-05');
+assert.equal(days.progress.dayStreak, 1);
+assert.equal(days.progress.bestDayStreak, 3);
+// Часы на устройстве ушли назад — серия не ломается.
+assert.equal(applyDay(days.progress, '2026-10-01', 5).dayStreak, 1);
+assert.equal(applyDay(days.progress, '2026-10-01', 5).lastDay, '2026-10-05');
+assert.ok(Object.keys(applyDay(days.progress, '2026-12-01', 5).activity).every(day => dayDiff(day, '2026-12-01') < ACTIVITY_DAYS));
+const week = lastDays(days.progress, '2026-10-05');
+assert.deepEqual(week.map(d => d.day), ['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05']);
+assert.equal(week[6].today, true);
+assert.equal(week[5].xp, 0);
+const ogeRun = applyTest(emptyProgress(), { ...base, topicId: OGE_VARIANT_ID, correct: 21, total: 24, schoolClass: 9 }, '2026-10-01');
+assert.deepEqual(ogeRun.newBadges.map(b => b.id).filter(id => id.startsWith('oge')), ['ogeVariant', 'oge20']);
+let many = { progress: emptyProgress() };
+for (let i = 0; i < 10; i++) many = applyTest(many.progress, { ...base, correct: 20, percent: 100, grade: 5 }, '2026-10-01');
+assert.ok(many.progress.badges.includes('tests10') && many.progress.badges.includes('level5'));
+assert.equal(ELEMENTS.length, 36);
+assert.deepEqual([ELEMENTS[0].symbol, ELEMENTS[25].symbol, ELEMENTS[35].group, ELEMENTS[20].period], ['H', 'Fe', 18, 4]);
+assert.equal(new Set(ELEMENTS.map(el => `${el.period}:${el.group}`)).size, 36);
+assert.deepEqual([0, 1, 99, 100, 250, 3500, 99999].map(xp => elementsUnlocked(xp).count), [0, 1, 1, 2, 3, 36, 36]);
+assert.deepEqual([0, 30, 100, 99999].map(xp => elementsUnlocked(xp).toNext), [1, 70, 100, 0]);
+assert.deepEqual([1, 5, 10, 25].map(rankFor), ['Стажёр', 'Аналитик', 'Академик', 'Академик']);
+for (const ok of ['', 'Катализатор', 'Mendeleev_2', 'Юный химик', 'маша']) assert.ok(checkNickname(ok).ok, ok);
+for (const bad of ['Иван Петров', 'a@b.ru', '+7 900 123-45-67', 'x'.repeat(21), '<script>', 'www.site.ru']) assert.ok(!checkNickname(bad).ok, bad);
+assert.equal(checkNickname('  Нео   Химик ').value, 'Нео Химик');
+assert.deepEqual(normalizeProfile({ nick: 'Иван Петров', avatar: '💀' }), { nick: '', avatar: AVATARS[0] });
+const saved = exportData(many.progress, { nick: 'Нео', avatar: AVATARS[3] }, '2026-10-01');
+const restored = importData(JSON.parse(JSON.stringify(saved)), emptyProgress(), BADGES.map(b => b.id));
+assert.deepEqual(restored.progress, { ...emptyProgress(), ...many.progress });
+assert.deepEqual(restored.profile, { nick: 'Нео', avatar: AVATARS[3] });
+assert.deepEqual(importData({ ...saved, progress: { ...saved.progress, badges: ['first', 'hacker'] } }, emptyProgress(), BADGES.map(b => b.id)).progress.badges, ['first']);
+for (const broken of [null, {}, { ...saved, app: 'other' }, { ...saved, progress: { xp: -5 } }, { ...saved, progress: { best: { t1: 140 } } }, { ...saved, progress: { lastDay: 'вчера' } }, { ...saved, progress: { grades: [3] } }]) {
+  assert.throws(() => importData(broken, emptyProgress(), BADGES.map(b => b.id)));
+}
 // Режим ОГЭ: банк, вариант, баллы.
 const meta = JSON.parse(await readFile(new URL('data/oge/meta.json', root)));
 const ogeBank = validateExamBank(JSON.parse(await readFile(new URL(meta.bank, root))), meta);
@@ -116,4 +169,4 @@ for (let run = 0; run < 200; run++, examRuns++) {
 assert.deepEqual([0, 9, 10, 20, 21, 24, 30, 31, 38].map(points => examGrade(points, meta.scale)), [2, 2, 3, 3, 4, 4, 4, 5, 5]);
 assert.throws(() => validateExamBank([{ ...ogeBank[0], answer: '29' }], meta));
 assert.throws(() => validateExamBank(ogeBank.filter(task => task.n !== 7), meta));
-console.log(`OK: ${count} вопросов; ${runs} случайных тестов; правильные ответы после перемешивания; пропуски; границы оценок; короткий банк; расчёт таймера; XP, уровни и бейджи; ОГЭ: ${ogeBank.length} заданий, ${examRuns} вариантов, частичные баллы.`);
+console.log(`OK: ${count} вопросов; ${runs} случайных тестов; правильные ответы после перемешивания; пропуски; границы оценок; короткий банк; расчёт таймера; XP, уровни и бейджи; кабинет: серия дней, коллекция, ник, перенос; ОГЭ: ${ogeBank.length} заданий, ${examRuns} вариантов, частичные баллы.`);

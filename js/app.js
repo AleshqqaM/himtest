@@ -1,3 +1,4 @@
+import { rankFor, ELEMENTS, XP_PER_ELEMENT, elementsUnlocked, localDay, applyDay, currentDayStreak, lastDays, AVATARS, NICK_MAX, emptyProfile, checkNickname, normalizeProfile, exportData, importData } from './cabinet.js';
 import { MATCH_LETTERS, emptyResponse, isComplete, isStarted, toBlank, formatBlank, scoreTask, examGrade, prepareVariant, validateExamBank } from './exam.js';
 
 // Чистые функции: их можно проверить отдельно от интерфейса.
@@ -66,9 +67,18 @@ export const BADGES = [
   { id: 'perfect', emoji: '💎', title: 'Чистое вещество', hint: 'Тест без единой ошибки' },
   { id: 'explorer', emoji: '🔭', title: 'Исследователь', hint: 'Пройди 3 разные темы' },
   { id: 'allGrades', emoji: '🧬', title: 'Полный ряд', hint: 'Темы всех классов с 6 по 11' },
+  { id: 'tests10', emoji: '🔟', title: 'Десять опытов', hint: 'Пройди 10 тестов' },
+  { id: 'days3', emoji: '📅', title: 'Три дня подряд', hint: 'Занимайся 3 дня подряд' },
+  { id: 'days7', emoji: '🗓️', title: 'Неделя химии', hint: 'Занимайся 7 дней подряд' },
+  { id: 'level5', emoji: '🎓', title: 'Аналитик', hint: 'Дойди до 5 уровня' },
+  { id: 'ogeVariant', emoji: '🎯', title: 'Пробник', hint: 'Реши вариант ОГЭ целиком' },
+  { id: 'oge20', emoji: '🏅', title: 'Почти максимум', hint: '20+ баллов из 24 в варианте ОГЭ' },
 ];
 
-export const emptyProgress = () => ({ xp: 0, tests: 0, bestStreak: 0, best: {}, badges: [], grades: [] });
+export const OGE_VARIANT_ID = 'oge-variant';
+
+export const emptyProgress = () => ({ xp: 0, tests: 0, bestStreak: 0, best: {}, badges: [], grades: [],
+  dayStreak: 0, bestDayStreak: 0, lastDay: null, activity: {} });
 
 export function xpForTest({ correct, total, grade }, bestStreak) {
   return correct * 10 + 10 + (bestStreak >= 5 ? 20 : 0) + (grade === 5 ? 30 : 0) + (total && correct === total ? 50 : 0);
@@ -83,7 +93,7 @@ export function levelFromXP(xp) {
   return { level, start, next, progress: (xp - start) / (next - start) };
 }
 
-export function applyTest(previous, summary) {
+export function applyTest(previous, summary, day = localDay()) {
   const progress = { ...emptyProgress(), ...previous };
   const gained = xpForTest(summary, summary.bestStreak);
   const before = levelFromXP(progress.xp).level;
@@ -95,7 +105,9 @@ export function applyTest(previous, summary) {
     best: { ...progress.best, [summary.topicId]: Math.max(record ?? 0, summary.percent) },
     grades: [...new Set([...progress.grades, summary.schoolClass])].sort((a, b) => a - b),
     badges: [...progress.badges],
+    ...applyDay(progress, day, gained),
   };
+  const variant = summary.topicId === OGE_VARIANT_ID;
   const earned = {
     first: true,
     streak5: summary.bestStreak >= 5,
@@ -104,11 +116,17 @@ export function applyTest(previous, summary) {
     perfect: summary.total > 0 && summary.correct === summary.total,
     explorer: Object.keys(next.best).length >= 3,
     allGrades: next.grades.length >= 6,
+    tests10: next.tests >= 10,
+    days3: next.dayStreak >= 3,
+    days7: next.dayStreak >= 7,
+    level5: levelFromXP(next.xp).level >= 5,
+    ogeVariant: variant,
+    oge20: variant && summary.correct >= 20,
   };
   const newBadges = BADGES.filter(badge => earned[badge.id] && !next.badges.includes(badge.id));
   next.badges.push(...newBadges.map(badge => badge.id));
   return { progress: next, gained, newBadges, levelUp: levelFromXP(next.xp).level > before,
-    newRecord: record !== undefined && summary.percent > record };
+    newRecord: record !== undefined && summary.percent > record, dayStreakUp: next.dayStreak > 1 && next.lastDay !== progress.lastDay };
 }
 
 // localStorage может быть недоступен (приватный режим, запрет сайта), поэтому всё через try.
@@ -118,6 +136,9 @@ export const storage = {
   },
   set(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* прогресс просто не сохранится */ }
+  },
+  remove(key) {
+    try { localStorage.removeItem(key); } catch { /* удалять нечего */ }
   },
 };
 
@@ -174,7 +195,20 @@ const ICONS = {
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
   clipboard: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
 };
+
+// Склонение после числа: plural(3, ['день', 'дня', 'дней']) → «дня».
+const plural = (count, [one, few, many]) => {
+  const tens = count % 100, ones = count % 10;
+  if (tens >= 11 && tens <= 14) return many;
+  return ones === 1 ? one : ones >= 2 && ones <= 4 ? few : many;
+};
+const DAYS = ['день', 'дня', 'дней'];
 const motionOK = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.flask}</svg>`;
 const TOPIC_ICONS = {
@@ -331,12 +365,19 @@ async function initialize() {
   let exam = null;
   let examTimerId = null;
   const PROGRESS_KEY = 'himtest-progress';
+  const PROFILE_KEY = 'himtest-profile';
   let progress = { ...emptyProgress(), ...storage.get(PROGRESS_KEY, {}) };
+  let profile = normalizeProfile(storage.get(PROFILE_KEY, {}));
 
   function renderHeaderStats() {
     const { level } = levelFromXP(progress.xp);
-    document.querySelector('#header-stats').innerHTML = progress.tests
-      ? `<span class="level-chip" title="${progress.xp} XP">${icon('star')} Ур. ${level}</span>` : '';
+    document.querySelector('#header-stats').innerHTML = `<button class="level-chip" type="button" data-cabinet aria-label="Мой кабинет${progress.tests ? `, уровень ${level}` : ''}">
+      <span class="chip-avatar" aria-hidden="true">${profile.avatar}</span>${progress.tests ? `Ур. ${level}` : 'Кабинет'}</button>`;
+  }
+
+  function streakTag(reward) {
+    const days = reward.progress.dayStreak;
+    return reward.dayStreakUp ? `<span class="reward-tag">🔥 ${days} ${plural(days, DAYS)} подряд</span>` : '';
   }
 
   function progressPanelHTML() {
@@ -346,19 +387,13 @@ async function initialize() {
         <li><span class="step-num">3</span><span><strong>20 минут</strong>и сразу разбор</span></li>
       </ol>`;
     const lvl = levelFromXP(progress.xp);
-    return `<section class="progress-panel" aria-labelledby="progress-title">
-        <div class="level-row">
-          <span class="level-badge" aria-hidden="true">${lvl.level}</span>
-          <div class="level-info"><h2 id="progress-title">Уровень ${lvl.level}</h2>
-            <div class="xp-bar" role="progressbar" aria-label="Опыт до следующего уровня" aria-valuemin="${lvl.start}" aria-valuemax="${lvl.next}" aria-valuenow="${progress.xp}"><span style="width:${Math.round(lvl.progress * 100)}%"></span></div>
-            <p class="xp-text">${progress.xp} XP · до уровня ${lvl.level + 1} ещё ${lvl.next - progress.xp}</p></div>
-        </div>
-        <dl class="mini-stats"><div><dt>Тестов</dt><dd>${progress.tests}</dd></div><div><dt>Рекорд серии</dt><dd>🔥 ${progress.bestStreak}</dd></div><div><dt>Бейджи</dt><dd>${progress.badges.length}/${BADGES.length}</dd></div></dl>
-        <ul class="badges" aria-label="Бейджи">${BADGES.map(badge => {
-          const got = progress.badges.includes(badge.id);
-          return `<li class="badge ${got ? 'is-earned' : ''}" title="${badge.hint}"><span class="badge-emoji" aria-hidden="true">${got ? badge.emoji : '🔒'}</span><span class="badge-name">${badge.title}</span><span class="sr-only">${got ? 'получен' : `не получен: ${badge.hint}`}</span></li>`;
-        }).join('')}</ul>
-        <button class="text-button reset-progress" type="button" id="reset-progress">Сбросить прогресс</button>
+    const streak = currentDayStreak(progress, localDay());
+    return `<section class="progress-panel cabinet-teaser" aria-labelledby="progress-title">
+        <span class="avatar avatar-m" aria-hidden="true">${profile.avatar}</span>
+        <div class="level-info"><h2 id="progress-title">${profile.nick ? escapeHTML(profile.nick) : `Уровень ${lvl.level}`}</h2>
+          <div class="xp-bar" role="progressbar" aria-label="Опыт до следующего уровня" aria-valuemin="${lvl.start}" aria-valuemax="${lvl.next}" aria-valuenow="${progress.xp}"><span style="width:${Math.round(lvl.progress * 100)}%"></span></div>
+          <p class="xp-text">${profile.nick ? `Уровень ${lvl.level} · ` : ''}${rankFor(lvl.level)} · ${streak ? `🔥 ${streak} ${plural(streak, DAYS)} подряд` : 'начни серию дней сегодня'} · бейджи ${progress.badges.length}/${BADGES.length}</p></div>
+        <button class="button secondary" type="button" data-cabinet>${icon('trophy')} Мой кабинет</button>
       </section>`;
   }
 
@@ -426,14 +461,7 @@ async function initialize() {
     main.querySelectorAll('[data-start]').forEach(button => button.addEventListener('click', () => startTest(button.dataset.start)));
     main.querySelector('[data-oge-hub]').addEventListener('click', () => showOgeHub());
     main.querySelector('[data-oge-variant]').addEventListener('click', () => startExam('variant'));
-    main.querySelector('#reset-progress')?.addEventListener('click', () => {
-      if (!confirm('Сбросить уровень, XP, бейджи и рекорды на этом устройстве?')) return;
-      progress = emptyProgress();
-      storage.set(PROGRESS_KEY, progress);
-      renderHeaderStats();
-      showHome(true);
-      announcer.textContent = 'Прогресс сброшен.';
-    });
+    main.querySelector('.cabinet-teaser [data-cabinet]')?.addEventListener('click', () => showCabinet());
     if (moveFocus) focusHeading();
     if (animate) enter(main);
   }
@@ -634,6 +662,7 @@ async function initialize() {
           <span class="reward-xp">+${reward.gained} XP</span>
           ${reward.levelUp ? `<span class="reward-tag">${icon('star')} Новый уровень: ${levelFromXP(progress.xp).level}</span>` : ''}
           ${reward.newRecord ? `<span class="reward-tag">${icon('trophy')} Новый рекорд темы</span>` : ''}
+          ${streakTag(reward)}
         </div>
         ${reward.newBadges.length ? `<ul class="new-badges" aria-label="Новые бейджи">${reward.newBadges.map(badge => `<li><span aria-hidden="true">${badge.emoji}</span> ${badge.title}</li>`).join('')}</ul>` : ''}
         <p class="score-card-brand">${icon('atom')} ХимТест · химия по шагам</p>
@@ -690,13 +719,9 @@ async function initialize() {
   }
 
   // ============ Режим ОГЭ ============
-  const EXAM_PROGRESS = { variant: 'oge-variant', trainer: n => `oge-${n}` };
+  const EXAM_PROGRESS = { variant: OGE_VARIANT_ID, trainer: n => `oge-${n}` };
   const FORMAT_HINT = { multi: 'выбор двух ответов', match: 'соответствие', order: 'последовательность', number: 'расчёт' };
-  const pointsWord = points => {
-    const tens = points % 100, ones = points % 10;
-    if (tens >= 11 && tens <= 14) return 'баллов';
-    return ones === 1 ? 'балл' : ones >= 2 && ones <= 4 ? 'балла' : 'баллов';
-  };
+  const pointsWord = points => plural(points, ['балл', 'балла', 'баллов']);
 
   async function loadOge() {
     if (!oge) {
@@ -1010,6 +1035,7 @@ async function initialize() {
           <span class="reward-xp">+${reward.gained} XP</span>
           ${reward.levelUp ? `<span class="reward-tag">${icon('star')} Новый уровень: ${levelFromXP(progress.xp).level}</span>` : ''}
           ${reward.newRecord ? `<span class="reward-tag">${icon('trophy')} Новый рекорд</span>` : ''}
+          ${streakTag(reward)}
         </div>
         ${reward.newBadges.length ? `<ul class="new-badges" aria-label="Новые бейджи">${reward.newBadges.map(badge => `<li><span aria-hidden="true">${badge.emoji}</span> ${badge.title}</li>`).join('')}</ul>` : ''}` : ''}
         <p class="score-card-brand">${icon('atom')} ХимТест · химия по шагам</p>
@@ -1042,6 +1068,226 @@ async function initialize() {
     if (counted && grade >= 4) celebrate();
   }
 
+  // ============ Личный кабинет ============
+  // Ник, аватар и прогресс живут только в localStorage этого браузера. Сайт их никуда не отправляет.
+  const busy = () => screen === 'loading' || (session && !session.ended) || (exam && !exam.ended);
+
+  function saveProfile(next) {
+    profile = next;
+    storage.set(PROFILE_KEY, profile);
+    renderHeaderStats();
+  }
+
+  function cabinetTopicsHTML() {
+    const done = catalog.filter(topic => progress.best[topic.id] !== undefined);
+    if (!done.length) return '<p class="block-note">Пройди любую тему — здесь появится твой рекорд по ней.</p>';
+    return `<ul class="topic-records">${done.map(topic => `<li>
+        <span class="tr-title"><strong>${escapeHTML(topic.title)}</strong><small>${topic.grade} класс</small></span>
+        <span class="tr-bar" aria-hidden="true"><span style="width:${progress.best[topic.id]}%"></span></span>
+        <span class="tr-value">${progress.best[topic.id]}%</span></li>`).join('')}</ul>`;
+  }
+
+  function cabinetOgeHTML(meta) {
+    const best = progress.best[EXAM_PROGRESS.variant];
+    return `<section class="cabinet-block" aria-labelledby="cab-oge-title">
+        <div class="block-head"><h2 id="cab-oge-title">Карта ОГЭ</h2>${best !== undefined ? `<span class="goal">${icon('trophy')} Вариант: ${best}%</span>` : ''}</div>
+        <ol class="points-map" aria-label="Лучший результат по номерам заданий">${meta.numbers.map(({ n }) => {
+          const record = progress.best[EXAM_PROGRESS.trainer(n)];
+          const tone = record === undefined ? 'is-none' : record >= 85 ? 'is-full' : record >= 50 ? 'is-half' : 'is-zero';
+          return `<li class="${tone}"><span class="pm-num">${n}</span><span class="pm-pts">${record === undefined ? '—' : `${record}%`}</span><span class="sr-only">${record === undefined ? ': ещё не решал' : ''}</span></li>`;
+        }).join('')}</ol>
+        <p class="block-note">Зелёные номера освоены, оранжевые и красные стоит повторить.</p>
+        <button class="button secondary" type="button" data-oge-hub>${icon('target')} Тренажёр ОГЭ</button>
+      </section>`;
+  }
+
+  async function showCabinet(moveFocus = true) {
+    if (busy()) return;
+    let meta = null;
+    try { meta = (await loadOge()).meta; } catch (error) { console.error(error); }
+    setScreen('cabinet');
+    const today = localDay();
+    const lvl = levelFromXP(progress.xp);
+    const streak = currentDayStreak(progress, today);
+    const week = lastDays(progress, today);
+    const peak = Math.max(1, ...week.map(day => day.xp));
+    const doneToday = (progress.activity[today] ?? 0) > 0;
+    const collection = elementsUnlocked(progress.xp);
+    const next = ELEMENTS[collection.count];
+    main.innerHTML = `<section class="cabinet" aria-labelledby="cabinet-title">
+      <button class="text-button back-link" type="button" data-home>${icon('arrowLeft')} Все темы</button>
+      <div class="profile-card">
+        <span class="avatar avatar-l" aria-hidden="true">${profile.avatar}</span>
+        <div class="profile-main">
+          <p class="chip chip-violet">${icon('star')} Уровень ${lvl.level} · ${rankFor(lvl.level)}</p>
+          <h1 id="cabinet-title" tabindex="-1" data-focus>${profile.nick ? escapeHTML(profile.nick) : 'Мой кабинет'}</h1>
+          <div class="xp-bar" role="progressbar" aria-label="Опыт до следующего уровня" aria-valuemin="${lvl.start}" aria-valuemax="${lvl.next}" aria-valuenow="${progress.xp}"><span style="width:${Math.round(lvl.progress * 100)}%"></span></div>
+          <p class="xp-text">${progress.xp} XP · до уровня ${lvl.level + 1} ещё ${lvl.next - progress.xp}${lvl.level < 10 ? ` · дальше — «${rankFor(lvl.level + 1)}»` : ''}</p>
+        </div>
+        <button class="icon-button" type="button" data-edit-profile aria-expanded="false" aria-controls="profile-form" aria-label="Изменить ник и аватар">${icon('edit')}</button>
+      </div>
+      <form class="profile-form" id="profile-form" hidden novalidate>
+        <label class="field-label" for="nick-input">Ник <small>необязательно</small></label>
+        <input class="text-input" id="nick-input" name="nick" type="text" maxlength="${NICK_MAX}" autocomplete="off" spellcheck="false" value="${escapeHTML(profile.nick)}" placeholder="Например, Катализатор" aria-describedby="nick-hint">
+        <p class="field-hint" id="nick-hint">Придумай ник. Не пиши настоящие имя и фамилию, телефон или почту — ник видишь только ты на этом устройстве.</p>
+        <fieldset class="avatar-picker"><legend class="field-label">Аватар</legend>${AVATARS.map((avatar, i) => `<label class="avatar-option">
+          <input type="radio" name="avatar" value="${avatar}" ${avatar === profile.avatar ? 'checked' : ''}><span aria-hidden="true">${avatar}</span><span class="sr-only">Вариант ${i + 1}</span></label>`).join('')}</fieldset>
+        <div class="form-actions"><button class="button primary" type="submit">${icon('check')} Сохранить</button><button class="button secondary" type="button" data-cancel-profile>Отмена</button></div>
+      </form>
+      <dl class="cabinet-stats">
+        <div><dt>Дней подряд</dt><dd>🔥 ${streak}</dd></div>
+        <div><dt>Тестов</dt><dd>🧪 ${progress.tests}</dd></div>
+        <div><dt>Серия ответов</dt><dd>⚡ ${progress.bestStreak}</dd></div>
+        <div><dt>Бейджи</dt><dd>🏅 ${progress.badges.length}/${BADGES.length}</dd></div>
+      </dl>
+      <section class="cabinet-block" aria-labelledby="goal-title">
+        <div class="block-head"><h2 id="goal-title">Цель дня</h2><span class="goal ${doneToday ? 'is-done' : ''}">${doneToday ? `${icon('check')} Выполнена` : 'Один тест или вариант'}</span></div>
+        <ol class="week" aria-label="Опыт за последние 7 дней">${week.map(day => `<li class="${day.today ? 'is-today' : ''}${day.xp ? ' is-active' : ''}">
+          <span class="week-xp" aria-hidden="true">${day.xp || ''}</span>
+          <span class="week-bar" aria-hidden="true"><span style="height:${Math.round(day.xp / peak * 100)}%"></span></span>
+          <span class="week-day">${day.today ? 'сег' : day.label}</span><span class="sr-only">: ${day.xp} XP</span></li>`).join('')}</ol>
+        <p class="block-note">${streak ? `Серия: ${streak} ${plural(streak, DAYS)} подряд, лучшая — ${progress.bestDayStreak}. ${doneToday ? 'Завтра продолжим?' : 'Пройди тест сегодня, чтобы её не прервать.'}` : 'Пройди тест сегодня — начнётся серия дней.'}</p>
+      </section>
+      <section class="cabinet-block" aria-labelledby="collection-title">
+        <div class="block-head"><h2 id="collection-title">Коллекция элементов</h2><span class="goal">${collection.count}/${ELEMENTS.length}</span></div>
+        <ol class="ptable" aria-label="Открытые элементы">${ELEMENTS.map(el => {
+          const open = el.z <= collection.count;
+          const when = el.z === 1 ? 'после первого теста' : `с ${(el.z - 1) * XP_PER_ELEMENT} XP`;
+          return `<li class="pt-cell${open ? ' is-open' : ''}" style="grid-column:${el.group};grid-row:${el.period}" title="${open ? `${el.z}. ${el.name}` : `${el.name}: откроется ${when}`}">
+            <span class="pt-z" aria-hidden="true">${el.z}</span><span class="pt-sym" aria-hidden="true">${el.symbol}</span><span class="sr-only">${el.name}${open ? '' : ', закрыт'}</span></li>`;
+        }).join('')}</ol>
+        <p class="block-note">${next ? `За каждые ${XP_PER_ELEMENT} XP открывается новый элемент. Следующий — ${next.name} (${next.symbol}), ещё ${collection.toNext} XP.` : 'Все элементы первых четырёх периодов собраны. Ты настоящий химик!'}</p>
+      </section>
+      <section class="cabinet-block" aria-labelledby="badges-title">
+        <div class="block-head"><h2 id="badges-title">Бейджи</h2><span class="goal">${progress.badges.length}/${BADGES.length}</span></div>
+        <ul class="badges badge-grid">${BADGES.map(badge => {
+          const got = progress.badges.includes(badge.id);
+          return `<li class="badge ${got ? 'is-earned' : ''}"><span class="badge-emoji" aria-hidden="true">${got ? badge.emoji : '🔒'}</span><span class="badge-name">${badge.title}</span><span class="badge-hint">${badge.hint}</span><span class="sr-only">${got ? 'получен' : 'не получен'}</span></li>`;
+        }).join('')}</ul>
+      </section>
+      ${meta ? cabinetOgeHTML(meta) : ''}
+      <section class="cabinet-block" aria-labelledby="records-title">
+        <h2 id="records-title">Рекорды по темам</h2>
+        ${cabinetTopicsHTML()}
+      </section>
+      <section class="cabinet-block data-block" aria-labelledby="data-title">
+        <h2 id="data-title">${icon('shield')} Мои данные</h2>
+        <p>Ник, аватар и прогресс хранятся только в этом браузере. Мы их не получаем: на сайте нет регистрации, рекламы и счётчиков.</p>
+        <div class="data-actions">
+          <button class="button secondary" type="button" data-export>${icon('download')} Сохранить в файл</button>
+          <button class="button secondary" type="button" data-import>${icon('upload')} Загрузить из файла</button>
+          <button class="button danger" type="button" data-wipe>${icon('trash')} Удалить всё</button>
+          <input type="file" id="import-file" accept=".json,application/json" hidden>
+        </div>
+        <p class="data-status" id="data-status" role="status"></p>
+        <p class="block-note">Файл нужен, чтобы перенести прогресс на другое устройство. <button class="text-button inline-link" type="button" data-privacy>Как устроена конфиденциальность</button></p>
+      </section>
+    </section>`;
+    bindCabinet();
+    if (moveFocus) focusHeading();
+    enter(main);
+  }
+
+  function bindCabinet() {
+    const form = main.querySelector('#profile-form');
+    const toggle = main.querySelector('[data-edit-profile]');
+    const nick = form.querySelector('#nick-input');
+    const hint = form.querySelector('#nick-hint');
+    const status = main.querySelector('#data-status');
+    const hintText = hint.textContent;
+    const openForm = open => {
+      form.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+      if (open) nick.focus(); else toggle.focus();
+    };
+    main.querySelector('[data-home]').addEventListener('click', () => showHome(true));
+    main.querySelector('[data-oge-hub]')?.addEventListener('click', () => showOgeHub());
+    main.querySelector('[data-privacy]').addEventListener('click', () => showPrivacy());
+    toggle.addEventListener('click', () => openForm(form.hidden));
+    form.querySelector('[data-cancel-profile]').addEventListener('click', () => openForm(false));
+    nick.addEventListener('input', () => { nick.removeAttribute('aria-invalid'); hint.textContent = hintText; hint.classList.remove('is-error'); });
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const checked = checkNickname(nick.value);
+      if (!checked.ok) {
+        nick.setAttribute('aria-invalid', 'true');
+        hint.textContent = checked.error;
+        hint.classList.add('is-error');
+        nick.focus();
+        return;
+      }
+      saveProfile({ nick: checked.value, avatar: form.querySelector('[name=avatar]:checked')?.value ?? profile.avatar });
+      showCabinet();
+      announcer.textContent = 'Профиль сохранён на этом устройстве.';
+    });
+    main.querySelector('[data-export]').addEventListener('click', () => {
+      const today = localDay();
+      const blob = new Blob([JSON.stringify(exportData(progress, profile, today), null, 2)], { type: 'application/json' });
+      const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `himtest-progress-${today}.json` });
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      status.textContent = 'Файл сохранён на устройство. Он только у тебя — сайт его не получает.';
+    });
+    const file = main.querySelector('#import-file');
+    main.querySelector('[data-import]').addEventListener('click', () => file.click());
+    file.addEventListener('change', async () => {
+      const [picked] = file.files;
+      file.value = '';
+      if (!picked) return;
+      try {
+        if (picked.size > 200_000) throw new Error('Файл слишком большой для прогресса ХимТеста.');
+        let data;
+        try { data = JSON.parse(await picked.text()); } catch { throw new Error('Это не файл прогресса ХимТеста или он повреждён.'); }
+        const imported = importData(data, emptyProgress(), BADGES.map(badge => badge.id));
+        if (!confirm(`Заменить прогресс на этом устройстве? В файле: уровень ${levelFromXP(imported.progress.xp).level}, ${imported.progress.xp} XP, тестов: ${imported.progress.tests}.`)) return;
+        progress = imported.progress;
+        storage.set(PROGRESS_KEY, progress);
+        saveProfile(imported.profile);
+        await showCabinet();
+        main.querySelector('#data-status').textContent = 'Прогресс загружен из файла.';
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+    main.querySelector('[data-wipe]').addEventListener('click', () => {
+      if (!confirm('Удалить уровень, XP, бейджи, рекорды, ник и аватар с этого устройства? Отменить нельзя. Если нужно, сначала сохрани прогресс в файл.')) return;
+      progress = emptyProgress();
+      profile = emptyProfile();
+      storage.remove(PROGRESS_KEY);
+      storage.remove(PROFILE_KEY);
+      renderHeaderStats();
+      showHome(true);
+      announcer.textContent = 'Все данные удалены с этого устройства.';
+    });
+  }
+
+  function showPrivacy() {
+    if (busy()) return;
+    const from = screen;
+    setScreen('privacy');
+    main.innerHTML = `<section class="privacy" aria-labelledby="privacy-title">
+      <button class="text-button back-link" type="button" data-back>${icon('arrowLeft')} Назад</button>
+      <h1 id="privacy-title" tabindex="-1" data-focus>Конфиденциальность</h1>
+      <p class="hero-copy">Коротко: мы не собираем персональные данные. Всё, что ты делаешь на сайте, остаётся на твоём устройстве.</p>
+      <div class="privacy-grid">
+        <article class="cabinet-block"><h2>${icon('shield')} Что мы не собираем</h2>
+          <p>Нет регистрации и входа. Мы не спрашиваем имя, фамилию, возраст, школу, телефон, почту и фото. На сайте нет рекламы, счётчиков посещений и аналитики, мы не ставим cookie.</p></article>
+        <article class="cabinet-block"><h2>${icon('grid')} Что хранится на устройстве</h2>
+          <p>Уровень, XP, бейджи, рекорды, серия дней, ник, аватар и выбранная тема оформления. Всё лежит в памяти браузера (localStorage) на этом устройстве и не отправляется на сервер — у сайта его просто нет.</p></article>
+        <article class="cabinet-block"><h2>${icon('edit')} Ник</h2>
+          <p>Ник необязателен и виден только тебе. Придумай его сам: не используй настоящие имя и фамилию, телефон или почту — сайт такие ники не примет.</p></article>
+        <article class="cabinet-block"><h2>${icon('download')} Перенос и удаление</h2>
+          <p>В кабинете можно сохранить прогресс в файл и загрузить его на другом устройстве. Файл остаётся у тебя. Кнопка «Удалить всё» стирает данные сайта из этого браузера; то же делает очистка данных сайта в настройках браузера.</p></article>
+        <article class="cabinet-block"><h2>${icon('atom')} Хостинг и шрифты</h2>
+          <p>Сайт размещён на GitHub Pages, шрифты загружаются с Google Fonts. Как любые серверы, они технически видят IP-адрес и тип браузера, когда открывается страница. Это их журналы по их правилам, у нас к ним доступа нет.</p></article>
+      </div>
+      <p class="block-note">Если в будущем появятся аккаунты или общий рейтинг, сначала обновим эту страницу и попросим согласия — для младше 14 лет согласие дают родители.</p>
+    </section>`;
+    main.querySelector('[data-back]').addEventListener('click', () => (from === 'cabinet' ? showCabinet() : showHome(true)));
+    focusHeading();
+    enter(main);
+  }
+
   function showError(message) {
     main.innerHTML = `<div class="error-card" role="alert"><h1 style="font-size:2rem" tabindex="-1" data-focus>Лаборатория пока недоступна</h1><p>${escapeHTML(message)}</p><p>Если вы открыли index.html двойным щелчком, запустите локальный сервер по инструкции в README или откройте публичную ссылку.</p><button class="button primary" id="reload">Попробовать снова</button></div>`;
     main.querySelector('#reload').addEventListener('click', () => location.reload());
@@ -1049,6 +1295,8 @@ async function initialize() {
   }
 
   setupTheme();
+  document.querySelector('#header-stats').addEventListener('click', event => { if (event.target.closest('[data-cabinet]')) showCabinet(); });
+  document.querySelector('#privacy-link').addEventListener('click', () => showPrivacy());
   document.querySelector('#continue-test').addEventListener('click', () => dialog.close());
   document.querySelector('#confirm-finish').addEventListener('click', () => {
     if (exam && !exam.ended) finishExam();
